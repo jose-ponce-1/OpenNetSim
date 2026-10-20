@@ -1,0 +1,93 @@
+# ====================================================================
+# Android & Gradle Build Artifacts
+# ====================================================================
+*.apk
+*.aar
+*.ap_
+*.aab
+
+# Java archives & Libraries (preserving Gradle Wrapper)
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+
+# Dalvik / ART & Java class files
+*.dex
+*.class
+
+# Generated build directories & caches
+bin/
+gen/
+out/
+build/
+*/build/
+.gradle/
+.kotlin/
+.kotlinc/
+
+# Profiler & captures
+captures/
+.navigation/
+*.hprof
+
+# ====================================================================
+# Local Configuration & Sensitive Files
+# ====================================================================
+# Android SDK location & local environment configuration
+local.properties
+
+# Signing credentials & keystores
+*.jks
+*.keystore
+secrets.properties
+signing.properties
+
+# Google Services / Crashlytics / Firebase configuration
+google-services.json
+
+# Log files
+*.log
+
+# ====================================================================
+# IDE & Editor Files
+# ====================================================================
+# Android Studio / IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Visual Studio Code
+.vscode/
+
+# ====================================================================
+# Operating System & Package Manager Caches
+# ====================================================================
+# Windows
+Thumbs.db
+ehthumbs.db
+[Dd]esktop.ini
+$RECYCLE.BIN/
+
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+
+# ====================================================================
+# NDK / CMake (if native code is introduced)
+# ====================================================================
+.cxx/
+.externalNativeBuild/
+
+# ====================================================================
+# AI Tooling & Packaging Dumps
+# ====================================================================
+repomix-output.*
+.repomix/
