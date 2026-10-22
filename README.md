@@ -1,64 +1,64 @@
 # OpenNetSim 🌐📱
 
-> **Estado del Proyecto:** 🚧 **Work in Progress (WIP)**  
-> Este proyecto se encuentra en fase activa de desarrollo y pruebas.
+> **Project Status:** 🚧 **Work in Progress (WIP)**  
+> This project is currently under active development and testing.
 
-**OpenNetSim** es una aplicación moderna para Android diseñada para simular y emular condiciones de red adversas o degradadas (como 3G lento, Edge, Wi-Fi inestable, alta latencia o pérdida de paquetes) de forma granular y sin necesidad de permisos de superusuario (`root`).
-
----
-
-## 🎯 ¿Qué se quiere conseguir?
-
-El objetivo principal de OpenNetSim es proporcionar a desarrolladores, testers y entusiastas de redes una herramienta ligera y fiable en el propio dispositivo Android para evaluar la resiliencia y el comportamiento de aplicaciones móviles ante escenarios de conectividad realistas y hostiles.
-
-### Objetivos Clave:
-- **Sin Root (`VpnService` local):** Interceptar el tráfico de red de forma transparente a través de la API oficial de Android `VpnService` e interfaz TUN en espacio de usuario.
-- **Throttling Bidireccional Asimétrico:** Control independiente de velocidad de subida (*uplink*) y bajada (*downlink*) mediante el algoritmo **Token Bucket**.
-- **Inyección de Latencia y Jitter:** Simulación de retardo de ida y vuelta (RTT) y variación temporal mediante colas de retardo programadas.
-- **Pérdida de Paquetes (Packet Loss):** Simulación probabilística de descarte de paquetes IP.
-- **Pila de Reenvío en Espacio de Usuario (L3/L4):** Procesamiento nativo en Kotlin para TCP (con control de flujo), UDP (DNS y streaming) e ICMP (soporte para comandos `ping`), compatible con Dual-Stack **IPv4 e IPv6**.
-- **Interfaz Intuitiva y Telemetría en Vivo:** UI construida con **Jetpack Compose** y Material 3, equipada con presets rápidos (3G, Flaky Wi-Fi, satélite, etc.), ajustes manuales y métricas de consumo y descarte en tiempo real.
+**OpenNetSim** is an Android application designed to simulate and emulate adverse or degraded network conditions (such as slow 3G, Edge, flaky Wi-Fi, high latency, or packet loss) in a granular manner without requiring root privileges (`root`).
 
 ---
 
-## 🏗️ Arquitectura del Proyecto
+## 🎯 Goals and Objectives
 
-OpenNetSim sigue los principios de **Clean Architecture** para garantizar desacoplamiento, alto rendimiento y testabilidad unitaria:
+The main goal of OpenNetSim is to provide developers, QA engineers, and network enthusiasts with a lightweight, reliable on-device tool to evaluate mobile application resilience and behavior under realistic, hostile connectivity scenarios.
+
+### Key Features:
+- **Non-Root (`VpnService`):** Intercepts network traffic transparently using Android's official `VpnService` API and a userspace TUN interface.
+- **Asymmetric Bidirectional Throttling:** Independent bandwidth rate limiting for uplink and downlink traffic using the **Token Bucket** algorithm.
+- **Latency & Jitter Injection:** Simulates round-trip time (RTT) delays and temporal variations through scheduled delay queues.
+- **Packet Loss Simulation:** Probabilistic packet drop emulation at the IP level.
+- **Userspace L3/L4 Network Stack:** Pure Kotlin network forwarders for TCP (with flow control), UDP (DNS and streaming), and ICMP (native ping support), featuring **IPv4 & IPv6 Dual-Stack** compatibility.
+- **Intuitive UI & Live Telemetry:** Built with **Jetpack Compose** and Material 3, offering quick condition presets (3G, Flaky Wi-Fi, Satellite, etc.), manual sliders, and real-time throughput and drop metrics.
+
+---
+
+## 🏗️ Project Architecture
+
+OpenNetSim follows **Clean Architecture** principles to ensure decoupling, high performance, and unit testability:
 
 ```text
 OpenNetSim/
 ├── core/
-│   ├── engine/    # Lógica matemática pura: TokenBucketLimiter, LatencyQueue, PacketLossSimulator
-│   ├── packet/    # Parsers, serializadores y cálculo de checksums (IPv4, IPv6, TCP, UDP, ICMP)
-│   └── buffer/    # Gestión eficiente de memoria y reciclaje (ByteBufferPool sin contención)
-├── service/       # VpnService, ForegroundService, túnel TUN y forwarders de red en userspace
-├── model/         # Modelos inmutables de configuración, presets y telemetría
-└── ui/            # Pantallas reactivas en Jetpack Compose, ViewModels y diseño Material 3
+│   ├── engine/    # Pure mathematical logic: TokenBucketLimiter, LatencyQueue, PacketLossSimulator
+│   ├── packet/    # Parsers, serializers, and checksum computation (IPv4, IPv6, TCP, UDP, ICMP)
+│   └── buffer/    # Efficient memory management & recycling (contention-free ByteBufferPool)
+├── service/       # VpnService, ForegroundService, TUN interface loop, and userspace network forwarders
+├── model/         # Immutable data models for configuration, presets, and telemetry
+└── ui/            # Reactive Jetpack Compose screens, ViewModels, and Material 3 design
 ```
 
 ---
 
-## 🛠️ Requisitos y Compilación
+## 🛠️ Requirements & Build
 
 - **Android SDK:** Min SDK 26 (Android 8.0) / Target SDK 34 (Android 14)
-- **Lenguaje:** Kotlin 2.0+
+- **Language:** Kotlin 2.0+
 - **Build System:** Gradle (Kotlin DSL)
 
-### Comandos de Verificación
+### Verification Commands
 
 ```bash
-# Compilar código Kotlin
+# Compile Kotlin code
 ./gradlew compileDebugKotlin
 
-# Ejecutar tests unitarios (JVM sin emulador)
+# Run unit test suite (JVM without emulator)
 ./gradlew testDebugUnitTest
 
-# Generar APK de depuración
+# Build debug APK
 ./gradlew assembleDebug
 ```
 
 ---
 
-## 📄 Licencia
+## 📄 License
 
-Este proyecto está bajo la Licencia Apache 2.0. Consulta el archivo [LICENSE.txt](file:///c:/Users/josea/Documents/PROYECTOS/OpenNetSim/LICENSE.txt) para más detalles.
+This project is licensed under the Apache License 2.0. See the [LICENSE.txt](file:///c:/Users/josea/Documents/PROYECTOS/OpenNetSim/LICENSE.txt) file for details.
