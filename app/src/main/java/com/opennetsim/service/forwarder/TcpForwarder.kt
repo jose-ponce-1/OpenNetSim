@@ -1,4 +1,4 @@
-﻿package com.opennetsim.service.forwarder
+package com.opennetsim.service.forwarder
 
 import com.opennetsim.core.buffer.ByteBufferPool
 import com.opennetsim.core.packet.IpPacket
@@ -19,6 +19,7 @@ import java.nio.channels.Selector
 import java.nio.channels.SocketChannel
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.ConcurrentSkipListMap
 import kotlin.random.Random
 
 /**
@@ -64,6 +65,11 @@ class TcpForwarder(
         @Volatile var selectionKey: SelectionKey? = null
         val outOfOrderBuffer = java.util.TreeMap<Long, ByteArray>()
         @Volatile var outOfOrderBufferedBytes: Int = 0
+        val unackedDownlinkSegments = ConcurrentSkipListMap<Long, ByteArray>()
+        @Volatile var unackedDownlinkBytes: Int = 0
+        @Volatile var lastClientAckedSeq: Long = serverSeq
+        @Volatile var dupAckCount: Int = 0
+        @Volatile var lastRetransmitTimeMs: Long = lastActiveTimeMs
     }
 
     private val sessions = ConcurrentHashMap<SessionKey, Session>()
@@ -141,6 +147,10 @@ class TcpForwarder(
         val session = sessions[key] ?: return
         session.lastActiveTimeMs = System.currentTimeMillis()
 
+        if (tcp.isAck) {
+            handleClientAck(session, tcp)
+        }
+
         if (tcp.isFin) {
             handleFin(session, tcp)
             return
@@ -171,6 +181,7 @@ class TcpForwarder(
         val channel = try {
             SocketChannel.open().apply {
                 configureBlocking(false)
+                socket().receiveBufferSize = SOCKET_RCVBUF_BYTES
                 socketProtector.protect(socket())
             }
         } catch (e: Exception) {
@@ -254,7 +265,46 @@ class TcpForwarder(
             windowSize = calculateAdvertisedWindow(session)
         )
         session.serverSeq = (session.serverSeq + 1) and 0xFFFFFFFFL
+        session.lastClientAckedSeq = session.serverSeq
         sendToTun(session, synAck, isControl = true)
+    }
+
+    private fun handleClientAck(session: Session, tcp: TcpPacket) {
+        val ackNum = tcp.acknowledgmentNumber
+        val ackAdvance = (ackNum - session.lastClientAckedSeq).toInt()
+
+        if (ackAdvance > 0) {
+            val it = session.unackedDownlinkSegments.entries.iterator()
+            while (it.hasNext()) {
+                val entry = it.next()
+                val segEnd = (entry.key + entry.value.size) and 0xFFFFFFFFL
+                if ((ackNum - segEnd).toInt() >= 0) {
+                    session.unackedDownlinkBytes = (session.unackedDownlinkBytes - entry.value.size).coerceAtLeast(0)
+                    it.remove()
+                } else {
+                    break
+                }
+            }
+            session.lastClientAckedSeq = ackNum
+            session.dupAckCount = 0
+            session.lastRetransmitTimeMs = System.currentTimeMillis()
+        } else if (ackAdvance == 0 && tcp.payload.isEmpty() && !tcp.isSyn && !tcp.isFin) {
+            val missingPayload = session.unackedDownlinkSegments[ackNum] ?: return
+            session.dupAckCount++
+            if (session.dupAckCount >= 3) {
+                session.dupAckCount = 0
+                session.lastRetransmitTimeMs = System.currentTimeMillis()
+                val retransmit = TcpPacket.buildPshAck(
+                    srcPort = session.serverPort,
+                    dstPort = session.clientPort,
+                    seqNum = ackNum,
+                    ackNum = session.clientExpectedSeq,
+                    payload = missingPayload,
+                    windowSize = calculateAdvertisedWindow(session)
+                )
+                sendToTun(session, retransmit)
+            }
+        }
     }
 
     private fun handleData(session: Session, tcp: TcpPacket) {
@@ -420,7 +470,6 @@ class TcpForwarder(
                     }
 
                     val readyCount = selector.select(SELECTOR_TIMEOUT_MS)
-                    var throttledRead = false
                     if (readyCount > 0) {
                         val keys = selector.selectedKeys().iterator()
                         while (keys.hasNext()) {
@@ -440,17 +489,13 @@ class TcpForwarder(
                             }
 
                             if (key.isValid && key.isReadable) {
-                                if (canReadDownlink()) {
+                                if (canReadDownlink() && session.unackedDownlinkBytes < MAX_UNACKED_DOWNLINK_BYTES) {
                                     handleRead(session)
-                                } else {
-                                    throttledRead = true
                                 }
                             }
                         }
                     }
-                    if (throttledRead) {
-                        delay(1L)
-                    }
+                    checkRetransmissionTimeouts()
                 } catch (e: ClosedSelectorException) {
                     break
                 } catch (e: Exception) {
@@ -520,16 +565,22 @@ class TcpForwarder(
                 while (offset < data.size) {
                     val chunkSize = minOf(TCP_MAX_SEGMENT_SIZE, data.size - offset)
                     val chunk = data.copyOfRange(offset, offset + chunkSize)
+                    val seq = session.serverSeq
+
+                    if (!session.unackedDownlinkSegments.containsKey(seq)) {
+                        session.unackedDownlinkSegments[seq] = chunk
+                        session.unackedDownlinkBytes += chunk.size
+                    }
 
                     val pshAck = TcpPacket.buildPshAck(
                         srcPort = session.serverPort,
                         dstPort = session.clientPort,
-                        seqNum = session.serverSeq,
+                        seqNum = seq,
                         ackNum = session.clientExpectedSeq,
                         payload = chunk,
                         windowSize = window
                     )
-                    session.serverSeq = (session.serverSeq + chunk.size) and 0xFFFFFFFFL
+                    session.serverSeq = (seq + chunk.size) and 0xFFFFFFFFL
                     sendToTun(session, pshAck)
 
                     offset += chunkSize
@@ -551,6 +602,25 @@ class TcpForwarder(
             closeSession(session.key)
         } finally {
             bufferPool.release(buffer)
+        }
+    }
+
+    private fun checkRetransmissionTimeouts() {
+        val now = System.currentTimeMillis()
+        for (session in sessions.values) {
+            val firstEntry = session.unackedDownlinkSegments.firstEntry() ?: continue
+            if (now - session.lastRetransmitTimeMs >= RETRANSMIT_TIMEOUT_MS) {
+                session.lastRetransmitTimeMs = now
+                val retransmit = TcpPacket.buildPshAck(
+                    srcPort = session.serverPort,
+                    dstPort = session.clientPort,
+                    seqNum = firstEntry.key,
+                    ackNum = session.clientExpectedSeq,
+                    payload = firstEntry.value,
+                    windowSize = calculateAdvertisedWindow(session)
+                )
+                sendToTun(session, retransmit)
+            }
         }
     }
 
@@ -584,6 +654,8 @@ class TcpForwarder(
         }
         session?.outOfOrderBuffer?.clear()
         session?.outOfOrderBufferedBytes = 0
+        session?.unackedDownlinkSegments?.clear()
+        session?.unackedDownlinkBytes = 0
     }
 
     fun close() {
@@ -612,8 +684,11 @@ class TcpForwarder(
     companion object {
         private const val MAX_WINDOW_SIZE = 65535
         private const val MAX_PENDING_WRITES_BYTES = 65536 // 64 KB
+        private const val SOCKET_RCVBUF_BYTES = 16384 // 16 KB para acotar bufferbloat en el kernel
+        private const val MAX_UNACKED_DOWNLINK_BYTES = 32768 // 32 KB en vuelo por flujo
+        private const val RETRANSMIT_TIMEOUT_MS = 250L
         private const val TCP_MAX_SEGMENT_SIZE = 1360
-        private const val SELECTOR_TIMEOUT_MS = 10L
+        private const val SELECTOR_TIMEOUT_MS = 2L
         private const val SESSION_TIMEOUT_MS = 60_000L // 60 segundos de inactividad
         private const val CLEANUP_INTERVAL_MS = 5_000L
     }

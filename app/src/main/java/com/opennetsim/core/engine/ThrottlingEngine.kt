@@ -1,4 +1,4 @@
-﻿package com.opennetsim.core.engine
+package com.opennetsim.core.engine
 
 import com.opennetsim.model.ThrottleConfig
 import kotlin.math.max
@@ -81,7 +81,11 @@ class ThrottlingEngine(
      * Procesa un paquete entrante a través del pipeline.
      */
     @Synchronized
-    fun processIncoming(packet: ByteArray, currentTimeMs: Long = timeSourceMs()): PacketResult {
+    fun processIncoming(
+        packet: ByteArray,
+        currentTimeMs: Long = timeSourceMs(),
+        isPriority: Boolean = false
+    ): PacketResult {
         totalReceivedPackets++
         totalReceivedBytes += packet.size
 
@@ -92,14 +96,33 @@ class ThrottlingEngine(
             return PacketResult.Dropped
         }
 
+        val hasConfiguredLatency = latencyQueue.baseLatencyMs > 0L || latencyQueue.jitterMs > 0L
+
+        // Vía rápida para paquetes de control/ICMP: aplica latencia base sin bloqueo Head-of-Line
+        if (isPriority) {
+            if (!hasConfiguredLatency) {
+                totalReleasedPackets++
+                totalReleasedBytes += packet.size
+                return PacketResult.Released(packet)
+            }
+            val scheduledTimeMs = currentTimeMs + latencyQueue.calculateDelayMs()
+            val delayed = latencyQueue.enqueueWithScheduledTime(
+                data = packet,
+                scheduledReleaseTimeMs = scheduledTimeMs,
+                originalTimestampMs = currentTimeMs
+            )
+            return PacketResult.Enqueued(
+                scheduledReleaseTimeMs = delayed.scheduledReleaseTimeMs,
+                waitMs = max(0L, scheduledTimeMs - currentTimeMs)
+            )
+        }
+
         // Paso 2: Tail-drop backpressure si la cola de retención está saturada
         if (latencyQueue.isFull) {
             totalDroppedPackets++
             totalDroppedBytes += packet.size
             return PacketResult.Dropped
         }
-
-        val hasConfiguredLatency = latencyQueue.baseLatencyMs > 0L || latencyQueue.jitterMs > 0L
 
         // Paso 3: Si la cola no está vacía o hay latencia configurada, se encola para mantener el orden temporal estricto (FIFO)
         if (!latencyQueue.isEmpty || hasConfiguredLatency) {
@@ -108,8 +131,7 @@ class ThrottlingEngine(
             val scheduledTimeMs = if (latencyQueue.isEmpty) {
                 latencyScheduledMs
             } else {
-                val serializationDelayMs = max(1L, (packet.size * 1000L) / bandwidthLimiter.bytesPerSecond)
-                max(latencyScheduledMs, lastScheduledReleaseTimeMs + serializationDelayMs)
+                max(latencyScheduledMs, lastScheduledReleaseTimeMs)
             }
 
             lastScheduledReleaseTimeMs = scheduledTimeMs
@@ -135,7 +157,7 @@ class ThrottlingEngine(
         } else {
             // Tokens agotados: encolar con el retardo requerido para que el bucket se recargue
             val waitMs = max(1L, bandwidthLimiter.calculateWaitTimeMs(packet.size))
-            val scheduledTimeMs = currentTimeMs + waitMs
+            val scheduledTimeMs = max(currentTimeMs, lastScheduledReleaseTimeMs)
             lastScheduledReleaseTimeMs = scheduledTimeMs
 
             val delayed = latencyQueue.enqueueWithScheduledTime(
@@ -263,7 +285,7 @@ class ThrottlingEngine(
     }
 
     companion object {
-        private const val BACKPRESSURE_QUEUE_THRESHOLD = 8
+        private const val BACKPRESSURE_QUEUE_THRESHOLD = 64
 
         fun createPipeline(
             rateKbps: Int,
@@ -275,8 +297,8 @@ class ThrottlingEngine(
             val bytesPerSec = max(1024L, (rateKbps * 1000L) / 8L)
             val limiter = TokenBucketLimiter(
                 bytesPerSecond = bytesPerSec,
-                burstCapacityBytes = bytesPerSec,
-                timeSourceNanos = { timeSourceMs() * 1_000_000L }
+                burstCapacityBytes = TokenBucketLimiter.defaultBurstCapacity(bytesPerSec),
+                timeSourceNanos = System::nanoTime
             )
             val queue = LatencyQueue(
                 baseLatencyMs = max(0L, latencyMs.toLong()),

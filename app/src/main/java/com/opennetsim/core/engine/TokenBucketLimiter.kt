@@ -1,4 +1,4 @@
-﻿package com.opennetsim.core.engine
+package com.opennetsim.core.engine
 
 import kotlin.math.max
 import kotlin.math.min
@@ -13,7 +13,7 @@ import kotlin.math.min
  */
 class TokenBucketLimiter(
     bytesPerSecond: Long,
-    burstCapacityBytes: Long = bytesPerSecond,
+    burstCapacityBytes: Long = defaultBurstCapacity(bytesPerSecond),
     private val timeSourceNanos: () -> Long = System::nanoTime,
     minBurstCapacityBytes: Long = MIN_BURST_CAPACITY_BYTES
 ) {
@@ -87,7 +87,10 @@ class TokenBucketLimiter(
      * Actualiza la tasa y la capacidad de ráfaga sin reiniciar el bucket acumulado.
      */
     @Synchronized
-    fun updateRate(newBytesPerSecond: Long, newBurstCapacityBytes: Long = newBytesPerSecond) {
+    fun updateRate(
+        newBytesPerSecond: Long,
+        newBurstCapacityBytes: Long = defaultBurstCapacity(newBytesPerSecond)
+    ) {
         val now = timeSourceNanos()
         refill(now)
 
@@ -119,6 +122,10 @@ class TokenBucketLimiter(
          * Capacidad mínima de ráfaga garantizada para evitar inanición ante tramas MTU estándar (1500 bytes).
          */
         const val MIN_BURST_CAPACITY_BYTES: Long = 1500L
+        private const val BURST_WINDOW_DIVISOR: Long = 20L // Ráfaga máxima de 50 ms
+
+        fun defaultBurstCapacity(bytesPerSecond: Long): Long =
+            max(MIN_BURST_CAPACITY_BYTES, bytesPerSecond / BURST_WINDOW_DIVISOR)
     }
 }
 

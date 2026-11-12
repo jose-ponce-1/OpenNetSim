@@ -7,6 +7,7 @@ description: Compila el código Kotlin, ejecuta los tests unitarios del motor de
 ## 1. Verificación Estática y Compilación
 Ejecuta en el terminal:
 1. `./gradlew compileDebugKotlin`
+2. `./gradlew ktlintCheck detekt lintDebug`
 *Corrige cualquier error de tipos o advertencia crítica de API de Android antes de avanzar.*
 
 ## 2. Tests Unitarios del Motor de Red

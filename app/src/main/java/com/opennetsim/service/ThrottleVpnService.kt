@@ -17,6 +17,7 @@ import com.opennetsim.core.engine.BidirectionalThrottlingEngine
 import com.opennetsim.core.engine.PacketResult
 import com.opennetsim.core.packet.IpPacket
 import com.opennetsim.core.packet.Ipv6Packet
+import com.opennetsim.core.packet.TcpPacket
 import com.opennetsim.model.NetworkTelemetry
 import com.opennetsim.model.ThrottleConfig
 import com.opennetsim.model.ThrottlePreset
@@ -136,7 +137,7 @@ class ThrottleVpnService : VpnService(), VpnSocketProtector {
         // 4. Inicializar respondedor ICMP y forwarders hacia la red exterior
         val newIcmpResponder = IcmpResponder(
             onInboundPacket = { packetBytes ->
-                handleInboundPacket(packetBytes, newEngine)
+                handleInboundPacket(packetBytes, newEngine, isPriority = true)
             }
         )
         icmpResponder = newIcmpResponder
@@ -160,11 +161,7 @@ class ThrottleVpnService : VpnService(), VpnSocketProtector {
             bufferPool = bufferPool,
             canReadDownlink = { !newEngine.downlinkEngine.isBackpressured },
             onControlPacket = { packetBytes ->
-                if (newEngine.downlinkEngine.hasActiveImpairments) {
-                    handleInboundPacket(packetBytes, newEngine)
-                } else {
-                    writeToTun(packetBytes)
-                }
+                handleInboundPacket(packetBytes, newEngine, isPriority = true)
             }
         )
         tcpForwarder = newTcpForwarder
@@ -177,8 +174,12 @@ class ThrottleVpnService : VpnService(), VpnSocketProtector {
         startTelemetryLoop(newEngine)
     }
 
-    private fun handleInboundPacket(packetBytes: ByteArray, activeEngine: BidirectionalThrottlingEngine) {
-        when (val result = activeEngine.processDownlink(packetBytes)) {
+    private fun handleInboundPacket(
+        packetBytes: ByteArray,
+        activeEngine: BidirectionalThrottlingEngine,
+        isPriority: Boolean = false
+    ) {
+        when (val result = activeEngine.downlinkEngine.processIncoming(packetBytes, isPriority = isPriority)) {
             is PacketResult.Released -> {
                 writeToTun(result.packet)
             }
@@ -283,9 +284,13 @@ class ThrottleVpnService : VpnService(), VpnSocketProtector {
                     val bytesRead = inputStream.read(rawArray)
                     if (bytesRead > 0) {
                         val packetData = rawArray.copyOf(bytesRead)
+                        val isPriority = isPriorityPacket(packetData)
+                        while (!isPriority && activeEngine.uplinkEngine.isBackpressured && isActive) {
+                            delay(1L)
+                        }
 
                         // Procesar degradación en Uplink
-                        when (val result = activeEngine.processUplink(packetData)) {
+                        when (val result = activeEngine.uplinkEngine.processIncoming(packetData, isPriority = isPriority)) {
                             is PacketResult.Released -> {
                                 dispatchOutboundPacket(
                                     packetData = result.packet,
@@ -373,6 +378,23 @@ class ThrottleVpnService : VpnService(), VpnSocketProtector {
             } catch (e: Exception) {
                 // Cancelación de corrutina
             }
+        }
+    }
+
+    private fun isPriorityPacket(packetData: ByteArray): Boolean {
+        if (packetData.isEmpty()) return false
+        return when ((packetData[0].toInt() and 0xF0) ushr 4) {
+            4 -> {
+                val ip = IpPacket.parse(packetData) ?: return false
+                ip.protocol == IpPacket.PROTOCOL_ICMP ||
+                    (ip.protocol == IpPacket.PROTOCOL_TCP && TcpPacket.parse(ip.payload)?.payload?.isEmpty() == true)
+            }
+            6 -> {
+                val ipv6 = Ipv6Packet.parse(packetData) ?: return false
+                ipv6.nextHeader == Ipv6Packet.PROTOCOL_ICMPV6 ||
+                    (ipv6.nextHeader == Ipv6Packet.PROTOCOL_TCP && TcpPacket.parse(ipv6.payload)?.payload?.isEmpty() == true)
+            }
+            else -> false
         }
     }
 
