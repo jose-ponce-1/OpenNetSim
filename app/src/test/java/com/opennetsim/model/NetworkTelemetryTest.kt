@@ -43,6 +43,43 @@ class NetworkTelemetryTest {
     }
 
     @Test
+    fun testDownloadWithRetransmissionsExcludesThemFromGoodput() {
+        val sampler = TelemetrySampler(startMs = 0L)
+        sampler.sample(TrafficCounters(), nowMs = 0L)
+
+        // En 1 s salen 1_000_000 B de bajada, de los que 100_000 B son retransmisiones del túnel.
+        val telemetry = sampler.sample(
+            TrafficCounters(
+                downReleasedBytes = 1_000_000L,
+                upReleasedBytes = 50_000L,
+                retransmittedBytes = 100_000L,
+                droppedPackets = 3L
+            ),
+            nowMs = 1_000L
+        )
+
+        assertEquals("Caudal de bajada sin retransmisiones", 900_000L, telemetry.downBytesPerSecond)
+        assertEquals(50_000L, telemetry.upBytesPerSecond)
+        assertEquals(950_000L, telemetry.bytesPerSecond)
+        assertEquals("Las retransmisiones se informan aparte", 100_000L, telemetry.retransmittedBytes)
+        assertEquals(950_000L, telemetry.totalTransferredBytes)
+        assertEquals(3L, telemetry.totalDroppedPackets)
+        assertEquals("900.0 KB/s", telemetry.formattedDownThroughput())
+    }
+
+    @Test
+    fun testSamplerUsesPerIntervalDeltas() {
+        val sampler = TelemetrySampler(startMs = 0L)
+        sampler.sample(TrafficCounters(downReleasedBytes = 500_000L, retransmittedBytes = 10_000L), nowMs = 1_000L)
+        val second = sampler.sample(
+            TrafficCounters(downReleasedBytes = 700_000L, retransmittedBytes = 10_000L),
+            nowMs = 3_000L
+        )
+        // 200_000 B en 2 s, sin retransmisiones nuevas en el intervalo
+        assertEquals(100_000L, second.downBytesPerSecond)
+    }
+
+    @Test
     fun testConnectionState() {
         val connected = NetworkTelemetry(isConnected = true, totalDroppedPackets = 5)
         assertTrue(connected.isConnected)

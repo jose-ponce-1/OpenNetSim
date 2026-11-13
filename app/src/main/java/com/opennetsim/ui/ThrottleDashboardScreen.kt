@@ -150,7 +150,8 @@ fun ThrottleDashboardScreen(
             // Telemetría en Tiempo Real
             LiveTelemetrySection(
                 telemetry = uiState.telemetry,
-                isActive = uiState.isActive
+                isActive = uiState.isActive,
+                ipv6Routed = uiState.ipv6Routed
             )
 
             // Selector Horizontal de Perfiles
@@ -590,7 +591,8 @@ private fun InfoCard() {
 @Composable
 private fun LiveTelemetrySection(
     telemetry: NetworkTelemetry,
-    isActive: Boolean
+    isActive: Boolean,
+    ipv6Routed: Boolean
 ) {
     ControlCard(
         title = "Telemetría en Vivo",
@@ -601,8 +603,13 @@ private fun LiveTelemetrySection(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             TelemetryItem(
-                label = "Tasa Actual",
-                value = if (isActive) telemetry.formattedThroughput() else "0 B/s",
+                label = "Bajada",
+                value = if (isActive) telemetry.formattedDownThroughput() else "0 B/s",
+                valueColor = CyanPrimary
+            )
+            TelemetryItem(
+                label = "Subida",
+                value = if (isActive) telemetry.formattedUpThroughput() else "0 B/s",
                 valueColor = CyanPrimary
             )
             TelemetryItem(
@@ -635,7 +642,11 @@ private fun LiveTelemetrySection(
                     .background(if (telemetry.isConnected) EmeraldActive else Slate600)
             )
             Text(
-                text = if (telemetry.isConnected) "Túnel VPN activo (10.0.0.2/24 • MTU 1500)" else "Túnel VPN desconectado",
+                text = when {
+                    !telemetry.isConnected -> "Túnel VPN desconectado"
+                    ipv6Routed -> "Túnel VPN activo (IPv4 + IPv6 • MTU 1500)"
+                    else -> "Túnel VPN activo (solo IPv4: la red no tiene IPv6 • MTU 1500)"
+                },
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium,
                 color = if (telemetry.isConnected) EmeraldActive else Slate400

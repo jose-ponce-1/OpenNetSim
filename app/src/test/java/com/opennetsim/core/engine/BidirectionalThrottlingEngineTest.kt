@@ -22,7 +22,8 @@ class BidirectionalThrottlingEngineTest {
 
         val engine = BidirectionalThrottlingEngine.fromConfig(
             config = config,
-            timeSourceMs = { simulatedTimeMs }
+            timeSourceMs = { simulatedTimeMs },
+            timeSourceNanos = { simulatedTimeMs * 1_000_000L }
         )
 
         assertEquals(25_000L, engine.uplinkEngine.bandwidthLimiter.bytesPerSecond)
@@ -44,7 +45,8 @@ class BidirectionalThrottlingEngineTest {
 
         val engine = BidirectionalThrottlingEngine.fromConfig(
             config = config,
-            timeSourceMs = { simulatedTimeMs }
+            timeSourceMs = { simulatedTimeMs },
+            timeSourceNanos = { simulatedTimeMs * 1_000_000L }
         )
 
         val upPacket = byteArrayOf(1, 2, 3)
@@ -94,7 +96,8 @@ class BidirectionalThrottlingEngineTest {
 
         val engine = BidirectionalThrottlingEngine.fromConfig(
             config = config,
-            timeSourceMs = { simulatedTimeMs }
+            timeSourceMs = { simulatedTimeMs },
+            timeSourceNanos = { simulatedTimeMs * 1_000_000L }
         )
 
         val newConfig = config.copy(
@@ -133,13 +136,17 @@ class BidirectionalThrottlingEngineTest {
 
         val engine = BidirectionalThrottlingEngine.fromConfig(
             config = config,
-            timeSourceMs = { simulatedTimeMs }
+            timeSourceMs = { simulatedTimeMs },
+            timeSourceNanos = { simulatedTimeMs * 1_000_000L }
         )
 
         // Verify MTU burst capacity floor on uplink (10 kbps -> 1250 B/s, but burst floor is MIN_BURST_CAPACITY_BYTES = 1500B)
         assertEquals(1500L, engine.uplinkEngine.bandwidthLimiter.burstCapacityBytes)
-        // Downlink 1000 kbps -> 125,000 B/s -> burst is 125,000B
-        assertEquals(125_000L, engine.downlinkEngine.bandwidthLimiter.burstCapacityBytes)
+        // Downlink 1000 kbps -> 125,000 B/s -> ráfaga de 50 ms = 6250 B
+        assertEquals(
+            TokenBucketLimiter.defaultBurstCapacity(125_000L),
+            engine.downlinkEngine.bandwidthLimiter.burstCapacityBytes
+        )
 
         val fullMtuPacket = ByteArray(1500) { 0x01 }
 
@@ -179,7 +186,8 @@ class BidirectionalThrottlingEngineTest {
 
         val engine = BidirectionalThrottlingEngine.fromConfig(
             config = config,
-            timeSourceMs = { simulatedTimeMs }
+            timeSourceMs = { simulatedTimeMs },
+            timeSourceNanos = { simulatedTimeMs * 1_000_000L }
         )
 
         val p1 = ByteArray(1000) { 1 }
@@ -225,37 +233,68 @@ class BidirectionalThrottlingEngineTest {
     fun testTailDropBackpressureAndCombinedTelemetry() {
         val config = ThrottleConfig(
             downKbps = 1000,
-            upKbps = 20,
-            latencyMs = 500,
+            upKbps = 20, // 2500 B/s
+            latencyMs = 500, // 250 ms por sentido
             jitterMs = 0,
             packetLossPercent = 0.0f
         )
 
         val engine = BidirectionalThrottlingEngine.fromConfig(
             config = config,
-            timeSourceMs = { simulatedTimeMs }
+            timeSourceMs = { simulatedTimeMs },
+            timeSourceNanos = { simulatedTimeMs * 1_000_000L }
         )
 
-        val packet = ByteArray(100) { 0x07 }
+        // Cota del carril masivo: max(2 × MTU, 2500 B/s × (500 + 250) ms) = 3_000 B
+        assertEquals(3_000L, engine.uplinkEngine.bulkCapacityBytes)
+        val packet = ByteArray(1500) { 0x07 }
 
-        // Enqueue 100 packets into uplink (saturating the queue capacity)
-        for (i in 1..100) {
+        for (i in 1..2) {
             val res = engine.processUplink(packet, simulatedTimeMs)
             assertTrue("Packet $i should be enqueued", res is PacketResult.Enqueued)
         }
 
-        // 101st packet must be tail-dropped
+        // El tercer paquete supera la cota por bytes: tail-drop
         val dropRes = engine.processUplink(packet, simulatedTimeMs)
-        assertTrue("101st packet should be dropped", dropRes is PacketResult.Dropped)
+        assertTrue("3rd packet should be dropped", dropRes is PacketResult.Dropped)
 
         // Downlink packet should still be successfully processed
         val downRes = engine.processDownlink(packet, simulatedTimeMs)
         assertTrue("Downlink packet should be enqueued normally", downRes is PacketResult.Enqueued)
 
         val metrics = engine.getCombinedMetrics()
-        assertEquals(102L, metrics.totalReceivedPackets)
+        assertEquals(4L, metrics.totalReceivedPackets)
         assertEquals(1L, metrics.totalDroppedPackets)
-        assertEquals(100L, metrics.totalDroppedBytes)
+        assertEquals(1500L, metrics.totalDroppedBytes)
+    }
+
+    @Test
+    fun testDownlinkCapacitySignalFlipsAtThreeQuartersOfBulkCapacity() {
+        val config = ThrottleConfig(downKbps = 128, upKbps = 128, latencyMs = 200, jitterMs = 0, packetLossPercent = 0f)
+        val engine = BidirectionalThrottlingEngine.fromConfig(
+            config = config,
+            timeSourceMs = { simulatedTimeMs },
+            timeSourceNanos = { simulatedTimeMs * 1_000_000L }
+        )
+        // 16_000 B/s × (500 + 100) ms = 9_600 B; umbral 75 % = 7_200 B
+        val capacity = engine.downlinkEngine.bulkCapacityBytes
+        assertEquals(9_600L, capacity)
+        assertTrue(engine.downlinkHasCapacity)
+
+        val packet = ByteArray(1000)
+        repeat(7) { engine.processDownlink(packet, simulatedTimeMs) } // 7_000 B < 7_200 B
+        assertTrue("Por debajo del 75 % hay capacidad", engine.downlinkHasCapacity)
+
+        engine.processDownlink(packet, simulatedTimeMs) // 8_000 B
+        assertTrue("Al cruzar el 75 % se señala contrapresión", !engine.downlinkHasCapacity)
+
+        // Al drenar por debajo del umbral vuelve la capacidad
+        var iterations = 0
+        while (!engine.downlinkHasCapacity && iterations++ < 1000) {
+            simulatedTimeMs += 10L
+            engine.drainDownlinkReady(simulatedTimeMs)
+        }
+        assertTrue(engine.downlinkHasCapacity)
+        assertTrue(engine.downlinkEngine.queuedBulkBytes * 4 < capacity * 3)
     }
 }
-

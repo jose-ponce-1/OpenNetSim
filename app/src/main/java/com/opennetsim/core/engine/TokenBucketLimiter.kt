@@ -1,5 +1,6 @@
 package com.opennetsim.core.engine
 
+import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
 
@@ -36,7 +37,13 @@ class TokenBucketLimiter(
 
     /**
      * Intenta consumir [bytes] tokens de forma atómica.
-     * @return true si había suficientes tokens y fueron consumidos; false en caso contrario.
+     *
+     * Un paquete se admite cuando hay al menos `min(bytes, burstCapacityBytes)` tokens y se descuenta
+     * su tamaño completo, aunque el saldo quede negativo (déficit). Así un paquete mayor que la ráfaga
+     * nunca bloquea la cola: sale en cuanto el bucket alcanza la ráfaga, y los siguientes esperan a
+     * que se pague la deuda, de modo que la tasa media sigue siendo exacta.
+     *
+     * @return true si el paquete fue admitido y sus tokens descontados; false en caso contrario.
      */
     @Synchronized
     fun tryConsume(bytes: Int): Boolean {
@@ -46,7 +53,7 @@ class TokenBucketLimiter(
         val now = timeSourceNanos()
         refill(now)
 
-        return if (availableTokens >= bytes) {
+        return if (availableTokens + TOKEN_EPSILON >= admissionThreshold(bytes)) {
             availableTokens -= bytes
             true
         } else {
@@ -55,8 +62,8 @@ class TokenBucketLimiter(
     }
 
     /**
-     * Calcula los nanosegundos de espera necesarios para que se acumulen suficientes
-     * tokens para transmitir un paquete de [bytes] bytes.
+     * Calcula los nanosegundos de espera hasta que un paquete de [bytes] bytes sea admitido por
+     * [tryConsume], incluyendo la deuda pendiente de paquetes anteriores mayores que la ráfaga.
      */
     @Synchronized
     fun calculateWaitTimeNanos(bytes: Int, nowNanos: Long = timeSourceNanos()): Long {
@@ -65,14 +72,29 @@ class TokenBucketLimiter(
 
         refill(nowNanos)
 
-        return if (availableTokens >= bytes) {
+        val threshold = admissionThreshold(bytes)
+        return if (availableTokens + TOKEN_EPSILON >= threshold) {
             0L
         } else {
-            val deficit = bytes - availableTokens
-            val nanosRequired = ((deficit / bytesPerSecond.toDouble()) * 1_000_000_000.0).toLong()
+            val deficit = threshold - availableTokens
+            val nanosRequired = ceil((deficit / bytesPerSecond.toDouble()) * 1_000_000_000.0).toLong()
             max(1L, nanosRequired)
         }
     }
+
+    /**
+     * Estima, en milisegundos (redondeo hacia arriba), cuánto tardará en admitirse un paquete de
+     * [bytes] si antes deben salir [bytesAhead] bytes ya encolados.
+     */
+    @Synchronized
+    fun estimateWaitTimeMs(bytesAhead: Long, bytes: Int, nowNanos: Long = timeSourceNanos()): Long {
+        refill(nowNanos)
+        val deficit = bytesAhead.coerceAtLeast(0L) + admissionThreshold(bytes) - availableTokens
+        if (deficit <= TOKEN_EPSILON) return 0L
+        return ceil(deficit * MS_PER_SECOND / bytesPerSecond.toDouble()).toLong()
+    }
+
+    private fun admissionThreshold(bytes: Int): Double = min(bytes.toLong(), burstCapacityBytes).toDouble()
 
     /**
      * Calcula el tiempo de espera en milisegundos (redondeo hacia arriba).
@@ -122,6 +144,10 @@ class TokenBucketLimiter(
          * Capacidad mínima de ráfaga garantizada para evitar inanición ante tramas MTU estándar (1500 bytes).
          */
         const val MIN_BURST_CAPACITY_BYTES: Long = 1500L
+
+        /** Tolerancia de redondeo en coma flotante al comparar tokens. */
+        private const val TOKEN_EPSILON: Double = 1e-6
+        private const val MS_PER_SECOND: Double = 1000.0
         private const val BURST_WINDOW_DIVISOR: Long = 20L // Ráfaga máxima de 50 ms
 
         fun defaultBurstCapacity(bytesPerSecond: Long): Long =

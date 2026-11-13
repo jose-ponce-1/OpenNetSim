@@ -8,35 +8,54 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
+import android.net.Network
 import android.net.VpnService
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.ParcelFileDescriptor
 import androidx.core.app.NotificationCompat
 import com.opennetsim.core.buffer.ByteBufferPool
 import com.opennetsim.core.engine.BidirectionalThrottlingEngine
+import com.opennetsim.core.engine.DelayedPacket
 import com.opennetsim.core.engine.PacketResult
+import com.opennetsim.core.engine.TrafficClass
 import com.opennetsim.core.packet.IpPacket
 import com.opennetsim.core.packet.Ipv6Packet
-import com.opennetsim.core.packet.TcpPacket
+import com.opennetsim.core.packet.PacketMeta
 import com.opennetsim.model.NetworkTelemetry
+import com.opennetsim.model.TelemetrySampler
 import com.opennetsim.model.ThrottleConfig
 import com.opennetsim.model.ThrottlePreset
+import com.opennetsim.model.TrafficCounters
+import com.opennetsim.model.TunnelState
+import com.opennetsim.service.diag.AndroidLogSink
+import com.opennetsim.service.diag.DiagLevel
+import com.opennetsim.service.diag.NetDiagnostics
+import com.opennetsim.service.diag.error
+import com.opennetsim.service.diag.warn
+import com.opennetsim.service.forwarder.ForwarderEnvironment
 import com.opennetsim.service.forwarder.IcmpResponder
 import com.opennetsim.service.forwarder.TcpForwarder
 import com.opennetsim.service.forwarder.UdpForwarder
 import com.opennetsim.service.forwarder.VpnSocketProtector
+import com.opennetsim.service.network.UnderlyingNetworkMonitor
 import com.opennetsim.ui.MainActivity
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.yield
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -64,8 +83,28 @@ class ThrottleVpnService : VpnService(), VpnSocketProtector {
 
     private val bufferPool = ByteBufferPool.defaultInstance
 
+    private val diagnostics: NetDiagnostics = AndroidLogSink.rateLimited()
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    /** Generación del pipeline activo: evita que un fallo de un pipeline viejo detenga uno nuevo. */
+    @Volatile
+    private var tunnelGeneration: Int = 0
+
+    /** True si el pipeline actual enruta IPv6 (la red física tenía IPv6 al establecerlo). */
+    private var ipv6Routed = false
+    private var lastEstablishFailure: String? = null
+
+    private val networkMonitor by lazy {
+        UnderlyingNetworkMonitor(this, diagnostics) { network, hasIpv6 ->
+            mainHandler.post { onUnderlyingNetworkChanged(network, hasIpv6) }
+        }
+    }
+
     private val serviceJob = SupervisorJob()
-    private val serviceScope = CoroutineScope(Dispatchers.IO + serviceJob)
+    private val coroutineFailureHandler = CoroutineExceptionHandler { _, throwable ->
+        failTunnel(tunnelGeneration, "service.coroutine", "Excepción no capturada en una corrutina del túnel", throwable)
+    }
+    private val serviceScope = CoroutineScope(Dispatchers.IO + serviceJob + coroutineFailureHandler)
 
     private var ioJob: Job? = null
     private var uplinkDrainJob: Job? = null
@@ -87,6 +126,8 @@ class ThrottleVpnService : VpnService(), VpnSocketProtector {
         when (action) {
             ACTION_STOP -> {
                 stopThrottling()
+                // Parada pedida por el usuario: limpia también un fallo anterior.
+                _tunnelState.value = TunnelState.Stopped
                 return START_NOT_STICKY
             }
             ACTION_UPDATE_CONFIG -> {
@@ -108,6 +149,7 @@ class ThrottleVpnService : VpnService(), VpnSocketProtector {
             updateActiveConfig(config)
             return
         }
+        _tunnelState.value = TunnelState.Starting
 
         // 1. Iniciar Foreground Service con notificación persistente
         val notification = buildNotification(config)
@@ -121,122 +163,215 @@ class ThrottleVpnService : VpnService(), VpnSocketProtector {
             startForeground(NOTIFICATION_ID, notification)
         }
 
-        // 2. Establecer la interfaz TUN virtual (Dual Stack IPv4 + IPv6)
-        val pfd = establishTunInterface()
-        if (pfd == null) {
-            stopThrottling()
-            return
+        networkMonitor.start()
+        if (!startPipeline(config)) {
+            stopThrottling(failureReason = lastEstablishFailure ?: "No se pudo establecer el túnel VPN")
         }
+    }
+
+    /**
+     * Establece el TUN y arranca motor, forwarders y bucles. IPv6 solo se enruta si la red física
+     * tiene conectividad IPv6. Devuelve false si el sistema rechaza establecer el TUN.
+     */
+    @Suppress("LongMethod")
+    private fun startPipeline(config: ThrottleConfig): Boolean {
+        // 2. Establecer la interfaz TUN virtual (IPv4 y, si la red física lo permite, IPv6)
+        val network = networkMonitor.currentNetwork()
+        val routeIpv6 = networkMonitor.hasIpv6(network)
+        val pfd = establishTunInterface(routeIpv6, network) ?: return false
+        ipv6Routed = routeIpv6
+        val generation = ++tunnelGeneration
         vpnInterface = pfd
         tunOutputStream = FileOutputStream(pfd.fileDescriptor)
 
         // 3. Inicializar el motor bidireccional con la configuración activa
         val newEngine = BidirectionalThrottlingEngine.fromConfig(config)
         engine = newEngine
+        val uplinkWake = Channel<Unit>(Channel.CONFLATED)
+        val downlinkWake = Channel<Unit>(Channel.CONFLATED)
+        val toDownlink: (ByteArray) -> Unit = { packetBytes ->
+            handleInboundPacket(packetBytes, newEngine, downlinkWake)
+        }
 
         // 4. Inicializar respondedor ICMP y forwarders hacia la red exterior
-        val newIcmpResponder = IcmpResponder(
-            onInboundPacket = { packetBytes ->
-                handleInboundPacket(packetBytes, newEngine, isPriority = true)
-            }
-        )
+        val newIcmpResponder = IcmpResponder(onInboundPacket = toDownlink)
         icmpResponder = newIcmpResponder
 
-        val newUdpForwarder = UdpForwarder(
+        val forwarderEnvironment = ForwarderEnvironment(
             socketProtector = this,
             coroutineScope = serviceScope,
-            onInboundPacket = { packetBytes ->
-                handleInboundPacket(packetBytes, newEngine)
-            },
-            bufferPool = bufferPool
+            bufferPool = bufferPool,
+            diagnostics = diagnostics
         )
+
+        val newUdpForwarder = UdpForwarder(environment = forwarderEnvironment, onInboundPacket = toDownlink)
         udpForwarder = newUdpForwarder
 
         val newTcpForwarder = TcpForwarder(
-            socketProtector = this,
-            coroutineScope = serviceScope,
-            onInboundPacket = { packetBytes ->
-                handleInboundPacket(packetBytes, newEngine)
-            },
-            bufferPool = bufferPool,
-            canReadDownlink = { !newEngine.downlinkEngine.isBackpressured },
-            onControlPacket = { packetBytes ->
-                handleInboundPacket(packetBytes, newEngine, isPriority = true)
-            }
+            environment = forwarderEnvironment,
+            onInboundPacket = toDownlink,
+            canReadDownlink = { newEngine.downlinkHasCapacity },
+            onControlPacket = toDownlink
         )
+        newTcpForwarder.updateDegradation(config.downKbps, config.latencyMs, config.jitterMs)
         tcpForwarder = newTcpForwarder
 
         _isServiceRunning.value = true
         _activeConfig.value = config
+        _tunnelState.value = TunnelState.Running(config, ipv6Routed = routeIpv6)
 
         // 5. Iniciar bucles de I/O en corrutinas y telemetría
-        startIoProcessing(pfd, newEngine, newUdpForwarder, newTcpForwarder, newIcmpResponder)
-        startTelemetryLoop(newEngine)
+        startIoProcessing(
+            TunnelPipeline(
+                generation = generation,
+                tunDescriptor = pfd,
+                engine = newEngine,
+                udpForwarder = newUdpForwarder,
+                tcpForwarder = newTcpForwarder,
+                icmpResponder = newIcmpResponder,
+                uplinkWake = uplinkWake,
+                downlinkWake = downlinkWake
+            )
+        )
+        startTelemetryLoop(newEngine, newTcpForwarder)
+        return true
     }
 
+    /**
+     * La red física cambió (hilo principal). Si cambia su disponibilidad de IPv6, se reconstruye el
+     * túnel entero para enrutar o dejar de enrutar IPv6; las conexiones en curso se reinician.
+     */
+    private fun onUnderlyingNetworkChanged(network: Network?, hasIpv6: Boolean) {
+        if (!_isServiceRunning.value) return
+        setUnderlyingNetworks(network?.let { arrayOf(it) })
+        if (hasIpv6 == ipv6Routed) return
+
+        diagnostics.log(
+            DiagLevel.INFO,
+            "net.change",
+            if (hasIpv6) "La red física ahora tiene IPv6: se enruta por el túnel" else "La red física perdió IPv6: se bloquea"
+        )
+        val config = _activeConfig.value
+        tearDownPipeline()
+        if (!startPipeline(config)) {
+            stopThrottling(failureReason = lastEstablishFailure ?: "No se pudo reconstruir el túnel tras un cambio de red")
+        }
+    }
+
+    /** Componentes de un pipeline activo del túnel. */
+    private class TunnelPipeline(
+        val generation: Int,
+        val tunDescriptor: ParcelFileDescriptor,
+        val engine: BidirectionalThrottlingEngine,
+        val udpForwarder: UdpForwarder,
+        val tcpForwarder: TcpForwarder,
+        val icmpResponder: IcmpResponder,
+        /** Despierta a uplinkDrainJob cuando el lector del TUN encola un paquete. */
+        val uplinkWake: Channel<Unit>,
+        /** Despierta a downlinkDrainJob cuando un forwarder encola un paquete. */
+        val downlinkWake: Channel<Unit>
+    )
+
+    /**
+     * Registra un fallo no recuperable del túnel y lo detiene desde el hilo principal, salvo que el
+     * fallo pertenezca a un pipeline ya sustituido.
+     */
+    private fun failTunnel(generation: Int, key: String, message: String, error: Throwable?) {
+        diagnostics.error(key, message, error)
+        mainHandler.post {
+            if (generation == tunnelGeneration && _isServiceRunning.value) {
+                stopThrottling(failureReason = message)
+            }
+        }
+    }
+
+    /**
+     * Ejecuta [block] para un único paquete: un error inesperado descarta ese paquete y se registra,
+     * sin detener el bucle que lo invoca. La cancelación de la corrutina se propaga.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    private inline fun guardPacket(key: String, block: () -> Unit) {
+        try {
+            block()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            diagnostics.error(key, "Paquete descartado por un error inesperado", e)
+        }
+    }
+
+    /**
+     * Encola un paquete de bajada (exterior → TUN). Nunca se escribe aquí: lo escribe solo
+     * downlinkDrainJob, en el orden del motor, para no reordenar paquetes de un mismo flujo.
+     */
     private fun handleInboundPacket(
         packetBytes: ByteArray,
         activeEngine: BidirectionalThrottlingEngine,
-        isPriority: Boolean = false
+        downlinkWake: Channel<Unit>
     ) {
-        when (val result = activeEngine.downlinkEngine.processIncoming(packetBytes, isPriority = isPriority)) {
-            is PacketResult.Released -> {
-                writeToTun(result.packet)
-            }
-            is PacketResult.Dropped -> {
-                // Descartado por el simulador de pérdida en downlink
-            }
-            is PacketResult.Enqueued -> {
-                // Retenido en la cola para entrega posterior con latencia en downlink
-            }
-        }
+        val meta = PacketMeta.parse(packetBytes)
+        val result = activeEngine.downlinkEngine.processIncoming(
+            packet = packetBytes,
+            trafficClass = classify(meta),
+            flowId = meta?.flowId ?: DelayedPacket.NO_FLOW,
+            allowImmediateRelease = false
+        )
+        if (result is PacketResult.Enqueued) downlinkWake.trySend(Unit)
+    }
+
+    /**
+     * Interactivo: segmentos TCP sin datos (ACK/SYN/FIN/RST), ICMP y DNS. El motor mantiene el orden
+     * por flujo, así que un FIN nunca adelanta a datos de su propia conexión.
+     */
+    private fun classify(meta: PacketMeta?): TrafficClass = when {
+        meta == null -> TrafficClass.BULK
+        meta.isIcmp || meta.isTcpWithoutPayload || meta.isDns -> TrafficClass.INTERACTIVE
+        else -> TrafficClass.BULK
     }
 
     private fun writeToTun(packet: ByteArray) {
         synchronized(tunWriteLock) {
+            val stream = tunOutputStream ?: return
             try {
-                tunOutputStream?.write(packet)
+                stream.write(packet)
             } catch (e: IOException) {
-                // Interface cerrada o error de descriptor
+                if (packet.size > TUN_MTU) {
+                    // Excepción a la regla de fallo fatal (design D12): un paquete entero mayor que el
+                    // MTU que el kernel rechaza solo se descarta; para la app equivale a una pérdida.
+                    diagnostics.warn("tun.write.oversize", "El TUN rechazó un paquete de ${packet.size} B; se descarta", e)
+                } else {
+                    failTunnel(tunnelGeneration, "tun.write", "Error escribiendo en el descriptor del TUN", e)
+                }
             }
         }
     }
 
-    private fun startTelemetryLoop(activeEngine: BidirectionalThrottlingEngine) {
+    private fun startTelemetryLoop(activeEngine: BidirectionalThrottlingEngine, activeTcpForwarder: TcpForwarder) {
         telemetryJob = serviceScope.launch {
-            var lastTransferredBytes = 0L
-            var lastTimestampMs = System.currentTimeMillis()
-
-            _telemetry.value = NetworkTelemetry(
-                bytesPerSecond = 0L,
-                totalTransferredBytes = 0L,
-                totalDroppedPackets = 0L,
-                isConnected = true
-            )
+            val sampler = TelemetrySampler(startMs = System.currentTimeMillis())
+            _telemetry.value = NetworkTelemetry(isConnected = true)
 
             while (isActive) {
-                delay(1000L)
-                val metrics = activeEngine.getCombinedMetrics()
-                val now = System.currentTimeMillis()
-                val elapsedMs = kotlin.math.max(1L, now - lastTimestampMs)
-
-                val deltaBytes = kotlin.math.max(0L, metrics.totalReleasedBytes - lastTransferredBytes)
-                val bytesPerSec = (deltaBytes * 1000L) / elapsedMs
-
-                lastTransferredBytes = metrics.totalReleasedBytes
-                lastTimestampMs = now
-
-                _telemetry.value = NetworkTelemetry(
-                    bytesPerSecond = bytesPerSec,
-                    totalTransferredBytes = metrics.totalReleasedBytes,
-                    totalDroppedPackets = metrics.totalDroppedPackets,
-                    isConnected = true
+                delay(TELEMETRY_INTERVAL_MS)
+                val down = activeEngine.downlinkEngine.getMetrics()
+                val up = activeEngine.uplinkEngine.getMetrics()
+                val counters = TrafficCounters(
+                    downReleasedBytes = down.totalReleasedBytes,
+                    upReleasedBytes = up.totalReleasedBytes,
+                    retransmittedBytes = activeTcpForwarder.retransmittedBytes(),
+                    droppedPackets = down.totalDroppedPackets + up.totalDroppedPackets
                 )
+                _telemetry.value = sampler.sample(counters, System.currentTimeMillis())
             }
         }
     }
 
-    private fun establishTunInterface(): ParcelFileDescriptor? {
+    /**
+     * Establece la interfaz TUN. Sin [routeIpv6] no se añade dirección, ruta ni DNS IPv6: Android
+     * bloquea entonces el tráfico IPv6 y las apps usan IPv4 sin esperar a timeouts.
+     */
+    private fun establishTunInterface(routeIpv6: Boolean, underlyingNetwork: Network?): ParcelFileDescriptor? {
+        lastEstablishFailure = null
         return try {
             val builder = Builder()
                 .setSession("OpenNetSim")
@@ -246,164 +381,140 @@ class ThrottleVpnService : VpnService(), VpnSocketProtector {
                 .addRoute("0.0.0.0", 0)
                 .addDnsServer("8.8.8.8")
                 .addDnsServer("1.1.1.1")
-                // Red virtual IPv6
-                .addAddress("fd00::2", 64)
-                .addRoute("::", 0)
-                .addDnsServer("2001:4860:4860::8888")
-                .addDnsServer("2606:4700:4700::1111")
+            if (routeIpv6) {
+                builder.addAddress("fd00::2", 64)
+                    .addRoute("::", 0)
+                    .addDnsServer("2001:4860:4860::8888")
+                    .addDnsServer("2606:4700:4700::1111")
+            }
+            builder.setUnderlyingNetworks(underlyingNetwork?.let { arrayOf(it) })
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                // Por defecto una VPN es "medida" y las apps reducen calidad o difieren descargas.
+                builder.setMetered(false)
+            }
 
             // Excluir la propia app del túnel para evitar recursión local
             try {
                 builder.addDisallowedApplication(packageName)
             } catch (e: PackageManager.NameNotFoundException) {
-                // Si falla la exclusión, continuar
+                diagnostics.warn("tun.establish", "No se pudo excluir la app del túnel; se confía en protect()", e)
             }
 
-            builder.establish()
-        } catch (e: Exception) {
-            null
+            val pfd = builder.establish()
+            if (pfd == null) {
+                recordEstablishFailure("El sistema rechazó el túnel: falta el permiso VPN u otra VPN lo bloquea", null)
+            }
+            pfd
+        } catch (e: IllegalArgumentException) {
+            recordEstablishFailure("Parámetros del túnel rechazados", e)
+        } catch (e: IllegalStateException) {
+            recordEstablishFailure("Estado no válido al establecer el túnel", e)
+        } catch (e: SecurityException) {
+            recordEstablishFailure("Sin permiso para establecer el túnel", e)
         }
     }
 
-    private fun startIoProcessing(
-        pfd: ParcelFileDescriptor,
-        activeEngine: BidirectionalThrottlingEngine,
-        activeUdpForwarder: UdpForwarder,
-        activeTcpForwarder: TcpForwarder,
-        activeIcmpResponder: IcmpResponder
-    ) {
-        val inputStream = FileInputStream(pfd.fileDescriptor)
+    private fun recordEstablishFailure(reason: String, error: Throwable?): ParcelFileDescriptor? {
+        lastEstablishFailure = reason
+        diagnostics.error("tun.establish", reason, error)
+        return null
+    }
 
-        // Bucle de lectura de paquetes salientes desde la interfaz TUN con buffer reciclado
+    private fun startIoProcessing(pipeline: TunnelPipeline) {
+        val generation = pipeline.generation
+        val activeEngine = pipeline.engine
+        val inputStream = FileInputStream(pipeline.tunDescriptor.fileDescriptor)
+
+        // Bucle de lectura de paquetes salientes desde la interfaz TUN con buffer reciclado.
+        // Nunca espera por contrapresión ni despacha: solo encola en el motor (o descarta).
         ioJob = serviceScope.launch {
             val buffer = bufferPool.acquire()
             val rawArray = buffer.array()
-
             try {
                 while (isActive) {
-                    val bytesRead = inputStream.read(rawArray)
-                    if (bytesRead > 0) {
-                        val packetData = rawArray.copyOf(bytesRead)
-                        val isPriority = isPriorityPacket(packetData)
-                        while (!isPriority && activeEngine.uplinkEngine.isBackpressured && isActive) {
-                            delay(1L)
-                        }
-
-                        // Procesar degradación en Uplink
-                        when (val result = activeEngine.uplinkEngine.processIncoming(packetData, isPriority = isPriority)) {
-                            is PacketResult.Released -> {
-                                dispatchOutboundPacket(
-                                    packetData = result.packet,
-                                    udpForwarder = activeUdpForwarder,
-                                    tcpForwarder = activeTcpForwarder,
-                                    icmpResponder = activeIcmpResponder
-                                )
-                            }
-                            is PacketResult.Dropped -> {
-                                // Descartado por pérdida en uplink
-                            }
-                            is PacketResult.Enqueued -> {
-                                // Retenido en la cola de retardo de uplink
-                            }
-                        }
-                    } else if (bytesRead < 0) {
+                    val bytesRead = try {
+                        inputStream.read(rawArray)
+                    } catch (e: IOException) {
+                        if (isActive) failTunnel(generation, "tun.read", "Error leyendo el descriptor del TUN", e)
                         break
                     }
+                    if (bytesRead < 0) {
+                        if (isActive) failTunnel(generation, "tun.read", "Fin de flujo inesperado en el TUN", null)
+                        break
+                    }
+                    if (bytesRead == 0) continue
+
+                    guardPacket("uplink.read") {
+                        enqueueUplinkPacket(rawArray.copyOf(bytesRead), pipeline)
+                    }
                 }
-            } catch (e: IOException) {
-                // Fin del flujo o interfaz TUN cerrada
             } finally {
                 bufferPool.release(buffer)
             }
         }
 
-        // Bucle de drenaje de paquetes salientes (Uplink) tras expirar su retardo
+        // Bucle de drenaje de paquetes salientes (Uplink): único punto de despacho a los forwarders,
+        // de modo que cada forwarder recibe los paquetes en el orden del motor.
         uplinkDrainJob = serviceScope.launch {
-            try {
-                while (isActive) {
-                    val readyPackets = activeEngine.drainUplinkReady()
-                    if (readyPackets.isNotEmpty()) {
-                        for (packet in readyPackets) {
-                            dispatchOutboundPacket(
-                                packetData = packet,
-                                udpForwarder = activeUdpForwarder,
-                                tcpForwarder = activeTcpForwarder,
-                                icmpResponder = activeIcmpResponder
-                            )
-                        }
-                    }
-
-                    val nextEventMs = activeEngine.timeUntilNextUplinkEventMs()
-                    when {
-                        nextEventMs == null -> delay(2L)
-                        nextEventMs <= 0L -> {
-                            if (readyPackets.isNotEmpty()) {
-                                yield()
-                            } else {
-                                delay(1L)
-                            }
-                        }
-                        else -> delay(nextEventMs.coerceIn(1L, 10L))
-                    }
+            while (isActive) {
+                var readyPackets: List<ByteArray> = emptyList()
+                guardPacket("uplink.drain") { readyPackets = activeEngine.drainUplinkReady() }
+                for (packet in readyPackets) {
+                    guardPacket("uplink.dispatch") { dispatchOutboundPacket(packet, pipeline) }
                 }
-            } catch (e: Exception) {
-                // Cancelación de corrutina
+                awaitNextEvent(activeEngine.timeUntilNextUplinkEventMs(), readyPackets.isNotEmpty(), pipeline.uplinkWake)
             }
         }
 
-        // Bucle de drenaje de paquetes entrantes (Downlink) tras expirar su retardo
+        // Bucle de drenaje de paquetes entrantes (Downlink): único escritor de datos hacia el TUN.
         downlinkDrainJob = serviceScope.launch {
-            try {
-                while (isActive) {
-                    val readyPackets = activeEngine.drainDownlinkReady()
-                    if (readyPackets.isNotEmpty()) {
-                        for (packet in readyPackets) {
-                            writeToTun(packet)
-                        }
-                    }
-
-                    val nextEventMs = activeEngine.timeUntilNextDownlinkEventMs()
-                    when {
-                        nextEventMs == null -> delay(2L)
-                        nextEventMs <= 0L -> {
-                            if (readyPackets.isNotEmpty()) {
-                                yield()
-                            } else {
-                                delay(1L)
-                            }
-                        }
-                        else -> delay(nextEventMs.coerceIn(1L, 10L))
-                    }
+            var hadCapacity = activeEngine.downlinkHasCapacity
+            while (isActive) {
+                var readyPackets: List<ByteArray> = emptyList()
+                guardPacket("downlink.drain") { readyPackets = activeEngine.drainDownlinkReady() }
+                for (packet in readyPackets) {
+                    guardPacket("downlink.write") { writeToTun(packet) }
                 }
-            } catch (e: Exception) {
-                // Cancelación de corrutina
+                // Señal de capacidad: reanudar lecturas TCP pausadas en cuanto la bajada tiene hueco.
+                val hasCapacity = activeEngine.downlinkHasCapacity
+                if (hasCapacity && !hadCapacity) pipeline.tcpForwarder.resumeReads()
+                hadCapacity = hasCapacity
+                awaitNextEvent(activeEngine.timeUntilNextDownlinkEventMs(), readyPackets.isNotEmpty(), pipeline.downlinkWake)
             }
         }
     }
 
-    private fun isPriorityPacket(packetData: ByteArray): Boolean {
-        if (packetData.isEmpty()) return false
-        return when ((packetData[0].toInt() and 0xF0) ushr 4) {
-            4 -> {
-                val ip = IpPacket.parse(packetData) ?: return false
-                ip.protocol == IpPacket.PROTOCOL_ICMP ||
-                    (ip.protocol == IpPacket.PROTOCOL_TCP && TcpPacket.parse(ip.payload)?.payload?.isEmpty() == true)
-            }
-            6 -> {
-                val ipv6 = Ipv6Packet.parse(packetData) ?: return false
-                ipv6.nextHeader == Ipv6Packet.PROTOCOL_ICMPV6 ||
-                    (ipv6.nextHeader == Ipv6Packet.PROTOCOL_TCP && TcpPacket.parse(ipv6.payload)?.payload?.isEmpty() == true)
-            }
-            else -> false
+    private fun enqueueUplinkPacket(packetData: ByteArray, pipeline: TunnelPipeline) {
+        val meta = PacketMeta.parse(packetData)
+        val result = pipeline.engine.uplinkEngine.processIncoming(
+            packet = packetData,
+            trafficClass = classify(meta),
+            flowId = meta?.flowId ?: DelayedPacket.NO_FLOW,
+            allowImmediateRelease = false
+        )
+        if (result is PacketResult.Enqueued) pipeline.uplinkWake.trySend(Unit)
+    }
+
+    /**
+     * Espera hasta el próximo evento del motor o hasta que se encole un paquete nuevo ([wake]).
+     */
+    private suspend fun awaitNextEvent(nextEventMs: Long?, releasedPackets: Boolean, wake: Channel<Unit>) {
+        val waitMs = when {
+            nextEventMs == null -> IDLE_WAIT_MS
+            nextEventMs <= 0L -> if (releasedPackets) 0L else 1L
+            else -> nextEventMs.coerceIn(1L, IDLE_WAIT_MS)
+        }
+        if (waitMs == 0L) {
+            yield()
+        } else {
+            withTimeoutOrNull(waitMs) { wake.receive() }
         }
     }
 
-    private fun dispatchOutboundPacket(
-        packetData: ByteArray,
-        udpForwarder: UdpForwarder,
-        tcpForwarder: TcpForwarder,
-        icmpResponder: IcmpResponder
-    ) {
+    private fun dispatchOutboundPacket(packetData: ByteArray, pipeline: TunnelPipeline) {
+        val udpForwarder = pipeline.udpForwarder
+        val tcpForwarder = pipeline.tcpForwarder
+        val icmpResponder = pipeline.icmpResponder
         if (packetData.isEmpty()) return
         val version = (packetData[0].toInt() and 0xF0) ushr 4
 
@@ -426,14 +537,39 @@ class ThrottleVpnService : VpnService(), VpnSocketProtector {
 
     private fun updateActiveConfig(config: ThrottleConfig) {
         engine?.updateConfig(config)
+        tcpForwarder?.updateDegradation(config.downKbps, config.latencyMs, config.jitterMs)
         _activeConfig.value = config
+        if (_tunnelState.value is TunnelState.Running) {
+            _tunnelState.value = TunnelState.Running(config, ipv6Routed)
+        }
 
         // Actualizar notificación visible con el nuevo perfil
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
         notificationManager?.notify(NOTIFICATION_ID, buildNotification(config))
     }
 
-    private fun stopThrottling() {
+    /**
+     * Detiene el túnel y el servicio. Con [failureReason] publica [TunnelState.Failed]; sin él publica
+     * [TunnelState.Stopped], salvo que ya hubiera un fallo (p. ej. onDestroy tras un fallo).
+     */
+    private fun stopThrottling(failureReason: String? = null) {
+        tearDownPipeline()
+        networkMonitor.stop()
+
+        _isServiceRunning.value = false
+        _telemetry.value = NetworkTelemetry(isConnected = false)
+        _tunnelState.value = when {
+            failureReason != null -> TunnelState.Failed(failureReason)
+            _tunnelState.value is TunnelState.Failed -> _tunnelState.value
+            else -> TunnelState.Stopped
+        }
+
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
+    }
+
+    /** Libera el pipeline actual (bucles, forwarders, descriptor del TUN y motor). */
+    private fun tearDownPipeline() {
         ioJob?.cancel()
         uplinkDrainJob?.cancel()
         downlinkDrainJob?.cancel()
@@ -453,26 +589,20 @@ class ThrottleVpnService : VpnService(), VpnSocketProtector {
             try {
                 tunOutputStream?.close()
             } catch (e: IOException) {
-                // Ignorar error al cerrar descriptor de salida
+                diagnostics.log(DiagLevel.DEBUG, "tun.close", "Error al cerrar el flujo de salida del TUN", e)
             }
             tunOutputStream = null
 
             try {
                 vpnInterface?.close()
             } catch (e: IOException) {
-                // Ignorar error al cerrar descriptor TUN
+                diagnostics.log(DiagLevel.DEBUG, "tun.close", "Error al cerrar el descriptor del TUN", e)
             }
             vpnInterface = null
         }
 
         engine?.clear()
         engine = null
-
-        _isServiceRunning.value = false
-        _telemetry.value = NetworkTelemetry(isConnected = false)
-
-        stopForeground(STOP_FOREGROUND_REMOVE)
-        stopSelf()
     }
 
     override fun onDestroy() {
@@ -568,9 +698,16 @@ class ThrottleVpnService : VpnService(), VpnSocketProtector {
         private const val CHANNEL_ID = "open_net_sim_vpn_channel"
         private const val NOTIFICATION_ID = 1001
         private const val TUN_MTU = 1500
+        private const val IDLE_WAIT_MS = 250L
+        private const val TELEMETRY_INTERVAL_MS = 1_000L
 
         private val _isServiceRunning = MutableStateFlow(false)
         val isServiceRunning: StateFlow<Boolean> = _isServiceRunning.asStateFlow()
+
+        private val _tunnelState = MutableStateFlow<TunnelState>(TunnelState.Stopped)
+
+        /** Estado real del túnel: la UI lo usa en lugar de suposiciones optimistas. */
+        val tunnelState: StateFlow<TunnelState> = _tunnelState.asStateFlow()
 
         private val _activeConfig = MutableStateFlow(ThrottlePreset.fromPreset(ThrottlePreset.SLOW_3G))
         val activeConfig: StateFlow<ThrottleConfig> = _activeConfig.asStateFlow()

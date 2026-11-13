@@ -38,6 +38,46 @@ class ThrottlingEngineTest {
     }
 
     @Test
+    fun testOversizedPacketDoesNotBlockQueueAt128Kbps() {
+        // 128 kbps = 16_000 B/s con la ráfaga por defecto (1500 B, inferior al paquete grande)
+        val engine = ThrottlingEngine(
+            bandwidthLimiter = TokenBucketLimiter(
+                bytesPerSecond = 16_000L,
+                timeSourceNanos = { simulatedTimeMs * 1_000_000L }
+            ),
+            latencyQueue = LatencyQueue(timeSourceMs = { simulatedTimeMs }),
+            packetLossSimulator = PacketLossSimulator(),
+            timeSourceMs = { simulatedTimeMs }
+        )
+        val startMs = simulatedTimeMs
+
+        // Vaciar la ráfaga inicial
+        assertTrue(engine.processIncoming(ByteArray(1500), simulatedTimeMs) is PacketResult.Released)
+
+        val big = ByteArray(3000) { 9 }
+        val followers = List(3) { index -> ByteArray(500) { index.toByte() } }
+        assertTrue(engine.processIncoming(big, simulatedTimeMs) is PacketResult.Enqueued)
+        followers.forEach { assertTrue(engine.processIncoming(it, simulatedTimeMs) is PacketResult.Enqueued) }
+
+        val drained = mutableListOf<ByteArray>()
+        var iterations = 0
+        while (drained.size < 4 && iterations < 100) {
+            iterations++
+            drained += engine.drainReady(simulatedTimeMs)
+            val next = engine.timeUntilNextEventMs(simulatedTimeMs) ?: break
+            simulatedTimeMs += maxOf(1L, next)
+        }
+
+        assertEquals("Todos los paquetes deben salir", 4, drained.size)
+        assertArrayEquals(big, drained[0])
+        followers.forEachIndexed { index, packet -> assertArrayEquals(packet, drained[index + 1]) }
+
+        // (3000 + 3 × 500) B a 16_000 B/s ≈ 281 ms tras vaciar la ráfaga inicial
+        val elapsedMs = simulatedTimeMs - startMs
+        assertTrue("Tiempo de salida ($elapsedMs ms) proporcional al tamaño", elapsedMs in 250L..320L)
+    }
+
+    @Test
     fun testImmediateReleaseWhenNoDegradation() {
         val engine = createEngine(bytesPerSec = 50_000L, baseLatencyMs = 0L, lossProbability = 0.0)
         val packet = byteArrayOf(1, 2, 3, 4, 5)
@@ -173,43 +213,158 @@ class ThrottlingEngineTest {
     }
 
     @Test
-    fun testTailDropWhenQueueReachesCapacity() {
+    fun testTailDropWhenBulkLaneReachesByteCapacity() {
         val limiter = TokenBucketLimiter(
             bytesPerSecond = 10_000L,
             burstCapacityBytes = 1500L,
             timeSourceNanos = { simulatedTimeMs * 1_000_000L }
         )
-        // Cola con capacidad máxima de 2 paquetes
-        val queue = LatencyQueue(
-            baseLatencyMs = 200L,
-            maxCapacity = 2,
-            timeSourceMs = { simulatedTimeMs }
-        )
+        val queue = LatencyQueue(baseLatencyMs = 200L, timeSourceMs = { simulatedTimeMs })
         val engine = ThrottlingEngine(
             bandwidthLimiter = limiter,
             latencyQueue = queue,
             packetLossSimulator = PacketLossSimulator(0.0),
             timeSourceMs = { simulatedTimeMs }
         )
+        // max(2 × 1500, 10_000 B/s × (500 + 200) ms) = 7_000 B
+        assertEquals(7_000L, engine.bulkCapacityBytes)
 
-        val p1 = byteArrayOf(1)
-        val p2 = byteArrayOf(2)
-        val p3 = byteArrayOf(3)
+        repeat(4) { assertTrue(engine.processIncoming(ByteArray(1500), simulatedTimeMs) is PacketResult.Enqueued) }
+        assertEquals(6_000L, engine.queuedBulkBytes)
 
-        // Primeros 2 paquetes se encolan
-        assertTrue(engine.processIncoming(p1, simulatedTimeMs) is PacketResult.Enqueued)
-        assertTrue(engine.processIncoming(p2, simulatedTimeMs) is PacketResult.Enqueued)
-        assertEquals(2, queue.size)
-        assertTrue(queue.isFull)
-
-        // El 3er paquete debe ser descartado por tail-drop
-        val dropResult = engine.processIncoming(p3, simulatedTimeMs)
+        val dropResult = engine.processIncoming(ByteArray(1500), simulatedTimeMs)
         assertTrue(dropResult is PacketResult.Dropped)
 
         val metrics = engine.getMetrics()
         assertEquals(1L, metrics.totalDroppedPackets)
-        assertEquals(1L, metrics.totalDroppedBytes)
-        assertEquals(2, queue.size)
+        assertEquals(1500L, metrics.totalDroppedBytes)
+        assertEquals(4, engine.queuedPackets)
+    }
+
+    // ------------------------------------------------------------------ Carriles y orden por flujo
+
+    private fun engineAt(bytesPerSec: Long, latencyMs: Long, lossProbability: Double = 0.0): ThrottlingEngine =
+        ThrottlingEngine(
+            bandwidthLimiter = TokenBucketLimiter(
+                bytesPerSecond = bytesPerSec,
+                timeSourceNanos = { simulatedTimeMs * 1_000_000L }
+            ),
+            latencyQueue = LatencyQueue(baseLatencyMs = latencyMs, timeSourceMs = { simulatedTimeMs }),
+            packetLossSimulator = PacketLossSimulator(lossProbability),
+            timeSourceMs = { simulatedTimeMs }
+        )
+
+    /** Drena simulando el reloj hasta vaciar ambos carriles; devuelve (paquete, instante de salida). */
+    private fun drainAll(engine: ThrottlingEngine, maxIterations: Int = 10_000): List<Pair<ByteArray, Long>> {
+        val out = mutableListOf<Pair<ByteArray, Long>>()
+        var iterations = 0
+        while (iterations++ < maxIterations) {
+            engine.drainReady(simulatedTimeMs).forEach { out += it to simulatedTimeMs }
+            val next = engine.timeUntilNextEventMs(simulatedTimeMs) ?: break
+            simulatedTimeMs += maxOf(1L, next)
+        }
+        return out
+    }
+
+    @Test
+    fun testFinStaysBehindRateLimitedDataOfItsFlow() {
+        val engine = engineAt(bytesPerSec = 16_000L, latencyMs = 0L)
+        val flow = 42L
+        val data = List(5) { index -> ByteArray(1400) { index.toByte() } }
+        val fin = ByteArray(40) { 0x7F }
+
+        // Como en el servicio: todo se encola y sale por el drenaje (sin liberación inmediata).
+        data.forEach {
+            engine.processIncoming(it, simulatedTimeMs, TrafficClass.BULK, flow, allowImmediateRelease = false)
+        }
+        val finResult =
+            engine.processIncoming(fin, simulatedTimeMs, TrafficClass.INTERACTIVE, flow, allowImmediateRelease = false)
+        assertTrue("El FIN espera detrás de los datos de su flujo", finResult is PacketResult.Enqueued)
+
+        val released = drainAll(engine).map { it.first }
+        assertEquals(6, released.size)
+        data.forEachIndexed { index, packet -> assertArrayEquals(packet, released[index]) }
+        assertArrayEquals("El FIN sale después del último segmento", fin, released.last())
+    }
+
+    @Test
+    fun testAckOfAnotherFlowOvertakesQueuedBulkData() {
+        val engine = engineAt(bytesPerSec = 16_000L, latencyMs = 50L)
+        val bulkFlow = 1L
+        val ackFlow = 2L
+        repeat(10) { engine.processIncoming(ByteArray(1400), simulatedTimeMs, TrafficClass.BULK, bulkFlow) }
+        val ack = ByteArray(40) { 0x11 }
+        val ackEnqueuedAt = simulatedTimeMs
+        engine.processIncoming(ack, simulatedTimeMs, TrafficClass.INTERACTIVE, ackFlow)
+
+        val released = drainAll(engine)
+        val ackIndex = released.indexOfFirst { it.first.contentEquals(ack) }
+        assertTrue("El ACK de otro flujo adelanta a los datos encolados (índice $ackIndex)", ackIndex in 0 until 3)
+        val ackDelay = released[ackIndex].second - ackEnqueuedAt
+        assertTrue("Con la latencia aplicada ($ackDelay ms)", ackDelay >= 50L)
+    }
+
+    @Test
+    fun testQueueingDelayIsBoundedAtLowRateWithParallelDownloads() {
+        val latencyMs = 100L
+        val engine = engineAt(bytesPerSec = 16_000L, latencyMs = latencyMs) // 128 kbps
+        val maxDelayMs = ThrottlingEngine.DEFAULT_QUEUE_WINDOW_MS + latencyMs
+
+        var accepted = 0
+        var dropped = 0
+        repeat(200) { index ->
+            val flow = (index % 6).toLong() // Seis descargas en paralelo
+            when (val result = engine.processIncoming(ByteArray(1400), simulatedTimeMs, TrafficClass.BULK, flow)) {
+                is PacketResult.Enqueued -> {
+                    accepted++
+                    assertTrue("Retardo estimado ${result.waitMs} ms > $maxDelayMs ms", result.waitMs <= maxDelayMs)
+                }
+                is PacketResult.Dropped -> dropped++
+                is PacketResult.Released -> accepted++
+            }
+        }
+        assertTrue("La cola se llena y descarta", dropped > 0)
+
+        // Los paquetes aceptados salen, como muy tarde, en la ventana más la latencia.
+        val startMs = simulatedTimeMs
+        val released = drainAll(engine)
+        assertEquals(accepted, released.size)
+        val lastDepartureDelay = released.last().second - startMs
+        assertTrue("Último paquete a $lastDepartureDelay ms", lastDepartureDelay <= maxDelayMs + 10L)
+    }
+
+    @Test
+    fun testDnsResponseIsNotQueuedBehindBulkTransfer() {
+        val latencyMs = 100L
+        val engine = engineAt(bytesPerSec = 16_000L, latencyMs = latencyMs)
+        repeat(15) { engine.processIncoming(ByteArray(1400), simulatedTimeMs, TrafficClass.BULK, 7L) }
+
+        val dns = ByteArray(120) { 0x35 }
+        val dnsEnqueuedAt = simulatedTimeMs
+        engine.processIncoming(dns, simulatedTimeMs, TrafficClass.INTERACTIVE, 99L)
+
+        val released = drainAll(engine)
+        val dnsDeparture = released.first { it.first.contentEquals(dns) }.second
+        // Latencia + su propia serialización (y como mucho un MTU en curso), no 15 × 1400 B de cola.
+        val bound = latencyMs + (2 * 1500L * 1000L) / 16_000L
+        val dnsDelay = dnsDeparture - dnsEnqueuedAt
+        assertTrue("DNS entregado a $dnsDelay ms (límite $bound)", dnsDelay <= bound)
+    }
+
+    @Test
+    fun testLossAppliesEquallyToControlAndDataPackets() {
+        val engine = engineAt(bytesPerSec = 100_000_000L, latencyMs = 0L, lossProbability = 0.05)
+        val total = 20_000
+        repeat(total) { index ->
+            val trafficClass = if (index % 2 == 0) TrafficClass.INTERACTIVE else TrafficClass.BULK
+            engine.processIncoming(ByteArray(40), simulatedTimeMs, trafficClass, (index % 10).toLong())
+            if (index % 100 == 0) {
+                simulatedTimeMs += 1L
+                engine.drainReady(simulatedTimeMs)
+            }
+        }
+        val dropRate = engine.getMetrics().totalDroppedPackets.toDouble() / total
+        assertEquals("Tasa de descarte medida", 0.05, dropRate, 0.01)
     }
 }
 

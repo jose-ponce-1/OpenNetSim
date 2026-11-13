@@ -86,11 +86,11 @@ fun MainAppContent(viewModel: MainViewModel) {
         }
     }
 
-    // Sincronizar cambios de configuración en caliente con el servicio activo
-    LaunchedEffect(uiState.config) {
-        if (uiState.isActive) {
-            val updateIntent = ThrottleVpnService.createUpdateConfigIntent(context, uiState.config)
-            context.startService(updateIntent)
+    // Sincronizar en caliente con el túnel activo: con debounce y solo si la configuración difiere
+    // de la que ya aplica el servicio (una recreación de la actividad no reenvía nada).
+    LaunchedEffect(viewModel) {
+        viewModel.configToApply.collect { config ->
+            context.startService(ThrottleVpnService.createUpdateConfigIntent(context, config))
         }
     }
 
@@ -103,11 +103,9 @@ fun MainAppContent(viewModel: MainViewModel) {
         onJitterChanged = viewModel::updateJitter,
         onPacketLossChanged = viewModel::updatePacketLoss,
         onToggleClick = {
-            if (uiState.isActive) {
-                // Detener el servicio VPN
-                val stopIntent = ThrottleVpnService.createStopIntent(context)
-                context.startService(stopIntent)
-                viewModel.onToggleThrottling(hasVpnPermission = true)
+            // El estado activo lo publica el servicio (TunnelState); aquí solo se envían órdenes.
+            if (uiState.isActive || uiState.isStarting) {
+                context.startService(ThrottleVpnService.createStopIntent(context))
             } else {
                 // Comprobar si se requiere solicitar permisos de VpnService
                 val vpnIntent = VpnService.prepare(context)
@@ -116,7 +114,6 @@ fun MainAppContent(viewModel: MainViewModel) {
                 } else {
                     val startIntent = ThrottleVpnService.createStartIntent(context, uiState.config)
                     ContextCompat.startForegroundService(context, startIntent)
-                    viewModel.onToggleThrottling(hasVpnPermission = true)
                 }
             }
         },

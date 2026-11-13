@@ -25,6 +25,13 @@ data class TcpPacket(
     val isAck: Boolean get() = (flags and FLAG_ACK) != 0
     val isUrg: Boolean get() = (flags and FLAG_URG) != 0
 
+    /** Opciones TCP parseadas (MSS y window scale). */
+    val parsedOptions: TcpOptions get() = TcpOptions.parse(options)
+
+    /** Longitud en el espacio de secuencias: payload más SYN y FIN, que consumen un número cada uno. */
+    val sequenceLength: Long
+        get() = payload.size.toLong() + (if (isSyn) 1L else 0L) + (if (isFin) 1L else 0L)
+
     /**
      * Serializa la cabecera TCP, opciones y payload, calculando el checksum con la pseudo-cabecera IPv4.
      */
@@ -211,22 +218,27 @@ data class TcpPacket(
         }
 
         /**
-         * Crea un paquete de respuesta SYN-ACK.
+         * Crea un paquete de respuesta SYN-ACK con las [options] indicadas (MSS / window scale).
          */
+        @Suppress("LongParameterList") // windowSize y options tienen valores por defecto.
         fun buildSynAck(
             srcPort: Int,
             dstPort: Int,
             seqNum: Long,
             ackNum: Long,
-            windowSize: Int = 65535
+            windowSize: Int = 65535,
+            options: TcpOptions = TcpOptions()
         ): TcpPacket {
+            val encodedOptions = options.encode()
             return TcpPacket(
                 sourcePort = srcPort,
                 destinationPort = dstPort,
                 sequenceNumber = seqNum,
                 acknowledgmentNumber = ackNum,
+                dataOffset = 5 + encodedOptions.size / 4,
                 flags = FLAG_SYN or FLAG_ACK,
-                windowSize = windowSize
+                windowSize = windowSize,
+                options = encodedOptions
             )
         }
 
@@ -309,6 +321,47 @@ data class TcpPacket(
                 flags = if (ackNum > 0L) (FLAG_RST or FLAG_ACK) else FLAG_RST,
                 windowSize = 0
             )
+        }
+
+        /**
+         * Crea un RST|ACK para abortar una sesión conocida, siempre con flag ACK.
+         */
+        fun buildRstAck(srcPort: Int, dstPort: Int, seqNum: Long, ackNum: Long): TcpPacket =
+            TcpPacket(
+                sourcePort = srcPort,
+                destinationPort = dstPort,
+                sequenceNumber = seqNum and 0xFFFFFFFFL,
+                acknowledgmentNumber = ackNum and 0xFFFFFFFFL,
+                flags = FLAG_RST or FLAG_ACK,
+                windowSize = 0
+            )
+
+        /**
+         * Crea el RST de respuesta a un [segment] que no pertenece a ninguna conexión (RFC 793, 3.4):
+         * - Si el segmento trae ACK: `seq = SEG.ACK`, sin flag ACK.
+         * - Si no: `seq = 0`, `ack = SEG.SEQ + SEG.LEN`, con RST|ACK.
+         *
+         * Devuelve null si el segmento es a su vez un RST (nunca se responde a un RST).
+         */
+        fun buildRstForSegment(segment: TcpPacket): TcpPacket? {
+            if (segment.isRst) return null
+            return if (segment.isAck) {
+                TcpPacket(
+                    sourcePort = segment.destinationPort,
+                    destinationPort = segment.sourcePort,
+                    sequenceNumber = segment.acknowledgmentNumber,
+                    acknowledgmentNumber = 0L,
+                    flags = FLAG_RST,
+                    windowSize = 0
+                )
+            } else {
+                buildRstAck(
+                    srcPort = segment.destinationPort,
+                    dstPort = segment.sourcePort,
+                    seqNum = 0L,
+                    ackNum = segment.sequenceNumber + segment.sequenceLength
+                )
+            }
         }
     }
 }

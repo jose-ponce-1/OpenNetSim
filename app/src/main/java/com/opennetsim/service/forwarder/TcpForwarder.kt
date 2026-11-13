@@ -1,16 +1,23 @@
 package com.opennetsim.service.forwarder
 
-import com.opennetsim.core.buffer.ByteBufferPool
 import com.opennetsim.core.packet.IpPacket
 import com.opennetsim.core.packet.Ipv6Packet
 import com.opennetsim.core.packet.TcpPacket
-import kotlinx.coroutines.CoroutineScope
+import com.opennetsim.core.tcp.ClientSegmentResult
+import com.opennetsim.core.tcp.SegmentKind
+import com.opennetsim.core.tcp.TcpConnection
+import com.opennetsim.core.tcp.TcpConnectionConfig
+import com.opennetsim.core.tcp.TcpConnectionOutput
+import com.opennetsim.core.tcp.TcpWindowPolicy
+import com.opennetsim.service.diag.DiagLevel
+import com.opennetsim.service.diag.error
+import com.opennetsim.service.diag.warn
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.IOException
+import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.nio.ByteBuffer
 import java.nio.channels.ClosedSelectorException
@@ -18,104 +25,169 @@ import java.nio.channels.SelectionKey
 import java.nio.channels.Selector
 import java.nio.channels.SocketChannel
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.ConcurrentLinkedQueue
-import java.util.concurrent.ConcurrentSkipListMap
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.random.Random
 
 /**
  * Reenvía conexiones TCP en espacio de usuario desde la interfaz TUN hacia la red exterior
  * utilizando Java NIO ([Selector], [SocketChannel]) protegidos con [VpnSocketProtector].
  *
- * Implementa:
- * - Handshake sincronizado (SYN-ACK emitido tras finishConnect exitoso hacia el servidor remoto).
- * - Control de flujo por ventana deslizante dinámica (anuncio de Zero-Window si se satura la salida).
- * - Deduplicación de retransmisiones del cliente.
- * - Soporte dual stack transparente (IPv4 e IPv6).
+ * Es solo la capa de I/O: la lógica TCP (handshake, reensamblado, retransmisión, ventanas, cierre)
+ * vive en [TcpConnection]. Modelo actor: todo el estado se toca en el hilo del selector.
+ *
+ * @param onInboundPacket recibe segmentos de datos y FIN (deben respetar el orden del flujo).
+ * @param canReadDownlink false cuando el pipeline de bajada no admite más datos.
+ * @param onControlPacket recibe ACKs, SYN-ACK, RST y sondas.
  */
+@Suppress("TooManyFunctions")
 class TcpForwarder(
-    private val socketProtector: VpnSocketProtector,
-    private val coroutineScope: CoroutineScope,
+    private val environment: ForwarderEnvironment,
     private val onInboundPacket: (ByteArray) -> Unit,
-    private val bufferPool: ByteBufferPool = ByteBufferPool.defaultInstance,
     private val canReadDownlink: () -> Boolean = { true },
-    private val onControlPacket: (ByteArray) -> Unit = onInboundPacket
+    private val onControlPacket: (ByteArray) -> Unit = onInboundPacket,
+    initialTcpConfig: TcpConnectionConfig = TcpConnectionConfig()
 ) {
     private data class SessionKey(
         val clientIp: String,
         val clientPort: Int,
         val serverIp: String,
         val serverPort: Int,
-        val isIpv6: Boolean = false
+        val isIpv6: Boolean
     )
 
-    private class Session(
+    /** Sesión: socket exterior + [TcpConnection]. También es la salida de efectos de la conexión. */
+    private inner class Session(
         val key: SessionKey,
         val channel: SocketChannel,
         val clientIpBytes: ByteArray,
-        val serverIpBytes: ByteArray,
-        val clientPort: Int,
-        val serverPort: Int,
-        val isIpv6: Boolean,
-        @Volatile var clientExpectedSeq: Long,
-        @Volatile var serverSeq: Long,
-        @Volatile var synAckSent: Boolean = false,
-        @Volatile var lastActiveTimeMs: Long
-    ) {
-        val pendingWrites = ConcurrentLinkedQueue<ByteBuffer>()
-        @Volatile var selectionKey: SelectionKey? = null
-        val outOfOrderBuffer = java.util.TreeMap<Long, ByteArray>()
-        @Volatile var outOfOrderBufferedBytes: Int = 0
-        val unackedDownlinkSegments = ConcurrentSkipListMap<Long, ByteArray>()
-        @Volatile var unackedDownlinkBytes: Int = 0
-        @Volatile var lastClientAckedSeq: Long = serverSeq
-        @Volatile var dupAckCount: Int = 0
-        @Volatile var lastRetransmitTimeMs: Long = lastActiveTimeMs
+        val serverIpBytes: ByteArray
+    ) : TcpConnectionOutput {
+        lateinit var connection: TcpConnection
+        var selectionKey: SelectionKey? = null
+        val pendingWrites = ArrayDeque<ByteBuffer>()
+        var pendingWriteBytes = 0
+        var readsPaused = false
+        var serverEof = false
+        var shutdownAfterFlush = false
+        var ioFailure: IOException? = null
+        var removed = false
+
+        override fun sendToClient(segment: TcpPacket, kind: SegmentKind, isRetransmission: Boolean) {
+            val packet = if (key.isIpv6) {
+                segment.toIpv6Packet(serverIpBytes, clientIpBytes).toByteArray()
+            } else {
+                segment.toIpPacket(serverIpBytes, clientIpBytes).toByteArray()
+            }
+            // Paquetes completos, como los cuenta el motor, para restarlos del caudal de bajada.
+            if (isRetransmission) retransmittedBytesCounter.addAndGet(packet.size.toLong())
+            if (kind == SegmentKind.CONTROL) onControlPacket(packet) else onInboundPacket(packet)
+        }
+
+        override fun writeToServer(data: ByteArray): Int {
+            val buffer = ByteBuffer.wrap(data)
+            try {
+                if (pendingWrites.isEmpty() && channel.isConnected) channel.write(buffer)
+            } catch (e: IOException) {
+                // Se aborta después del evento: abortar aquí reentraría en TcpConnection.
+                ioFailure = e
+                return pendingWriteBytes
+            }
+            if (buffer.hasRemaining()) {
+                pendingWrites.addLast(buffer)
+                pendingWriteBytes += buffer.remaining()
+                peakPendingWriteBytesValue = maxOf(peakPendingWriteBytesValue, pendingWriteBytes)
+                setInterest(SelectionKey.OP_WRITE, enabled = true)
+            }
+            return pendingWriteBytes
+        }
+
+        override fun shutdownServerOutput() {
+            if (pendingWrites.isEmpty()) shutdownChannelOutput(this) else shutdownAfterFlush = true
+        }
+
+        override fun closeConnection() {
+            removeSession(this)
+        }
+
+        fun setInterest(op: Int, enabled: Boolean) {
+            taskQueue.checkOwnerThread()
+            val selKey = selectionKey?.takeIf { it.isValid } ?: return
+            val current = selKey.interestOps()
+            val updated = if (enabled) current or op else current and op.inv()
+            if (updated != current) selKey.interestOps(updated)
+        }
     }
 
+    private val diagnostics = environment.diagnostics
+    private val bufferPool = environment.bufferPool
+
+    // Solo el hilo del selector escribe; ConcurrentHashMap permite que close() itere con seguridad.
     private val sessions = ConcurrentHashMap<SessionKey, Session>()
     private val selector: Selector = Selector.open()
-    private val pendingRegistrations = ConcurrentLinkedQueue<Runnable>()
+    private val taskQueue = SelectorTaskQueue(selector, environment.strictThreadChecks)
+    private var tcpConfig = initialTcpConfig
+
+    private val retransmittedBytesCounter = AtomicLong(0L)
+    private var peakPendingWriteBytesValue = 0
+
+    /** Iteraciones del bucle del selector (para tests de consumo de CPU). */
+    internal val loopIterations = AtomicLong(0L)
+
+    /** Máximo de bytes pendientes de escribir observado en una sesión (para tests). */
+    internal val peakPendingWriteBytes: Int get() = peakPendingWriteBytesValue
 
     private var workerJob: Job? = null
-    private var cleanupJob: Job? = null
 
     @Volatile
     private var isRunning = true
 
     init {
         startWorkerLoop()
-        startCleanupLoop()
+    }
+
+    /** Bytes (paquetes IP completos) retransmitidos hacia el cliente desde el arranque. */
+    fun retransmittedBytes(): Long = retransmittedBytesCounter.get()
+
+    /**
+     * Ajusta el tope de bytes en vuelo y el RTO inicial a la degradación configurada.
+     */
+    fun updateDegradation(downKbps: Int, latencyMs: Int, jitterMs: Int) {
+        val maxInFlight = TcpWindowPolicy.bdpCapBytes(downKbps, latencyMs, jitterMs)
+        val initialRto = TcpWindowPolicy.initialRtoMs(latencyMs, jitterMs)
+        taskQueue.post {
+            tcpConfig = tcpConfig.copy(maxInFlightBytes = maxInFlight, initialRtoMs = initialRto)
+            sessions.values.forEach { it.connection.maxInFlightBytes = maxInFlight }
+        }
+    }
+
+    /** El pipeline de bajada vuelve a admitir datos: reanudar lecturas pausadas. */
+    fun resumeReads() {
+        taskQueue.post { sessions.values.forEach { resumeReadsIfPossible(it) } }
     }
 
     /**
      * Procesa un segmento TCP saliente proveniente de un paquete IPv4 en la interfaz TUN.
      */
     fun processOutbound(ipPacket: IpPacket) {
-        processOutboundInternal(
-            srcIpBytes = ipPacket.sourceIp,
-            dstIpBytes = ipPacket.destinationIp,
-            srcIpString = ipPacket.sourceIpString,
-            dstIpString = ipPacket.destinationIpString,
-            payload = ipPacket.payload,
-            isIpv6 = false
-        )
+        enqueueOutbound(ipPacket.sourceIp, ipPacket.destinationIp, ipPacket.sourceIpString, ipPacket.destinationIpString, ipPacket.payload, false)
     }
 
     /**
      * Procesa un segmento TCP saliente proveniente de un paquete IPv6 en la interfaz TUN.
      */
     fun processOutboundIpv6(ipv6Packet: Ipv6Packet) {
-        processOutboundInternal(
-            srcIpBytes = ipv6Packet.sourceIp,
-            dstIpBytes = ipv6Packet.destinationIp,
-            srcIpString = ipv6Packet.sourceIpString,
-            dstIpString = ipv6Packet.destinationIpString,
-            payload = ipv6Packet.payload,
-            isIpv6 = true
+        enqueueOutbound(
+            ipv6Packet.sourceIp,
+            ipv6Packet.destinationIp,
+            ipv6Packet.sourceIpString,
+            ipv6Packet.destinationIpString,
+            ipv6Packet.payload,
+            true
         )
     }
 
-    private fun processOutboundInternal(
+    @Suppress("LongParameterList")
+    private fun enqueueOutbound(
         srcIpBytes: ByteArray,
         dstIpBytes: ByteArray,
         srcIpString: String,
@@ -124,573 +196,286 @@ class TcpForwarder(
         isIpv6: Boolean
     ) {
         if (!isRunning) return
-
         val tcp = TcpPacket.parse(payload) ?: return
-        val key = SessionKey(
-            clientIp = srcIpString,
-            clientPort = tcp.sourcePort,
-            serverIp = dstIpString,
-            serverPort = tcp.destinationPort,
-            isIpv6 = isIpv6
-        )
-
-        if (tcp.isRst) {
-            closeSession(key)
-            return
-        }
-
-        if (tcp.isSyn) {
-            handleSyn(key, srcIpBytes, dstIpBytes, tcp, isIpv6)
-            return
-        }
-
-        val session = sessions[key] ?: return
-        session.lastActiveTimeMs = System.currentTimeMillis()
-
-        if (tcp.isAck) {
-            handleClientAck(session, tcp)
-        }
-
-        if (tcp.isFin) {
-            handleFin(session, tcp)
-            return
-        }
-
-        if (tcp.payload.isNotEmpty()) {
-            handleData(session, tcp)
-        }
+        val key = SessionKey(srcIpString, tcp.sourcePort, dstIpString, tcp.destinationPort, isIpv6)
+        // Modelo actor: el estado de la sesión solo se toca en el hilo del selector.
+        taskQueue.post { handleClientSegment(key, srcIpBytes, dstIpBytes, tcp) }
     }
 
-    private fun handleSyn(
-        key: SessionKey,
-        srcIpBytes: ByteArray,
-        dstIpBytes: ByteArray,
-        tcp: TcpPacket,
-        isIpv6: Boolean
-    ) {
-        val existing = sessions[key]
-        if (existing != null) {
-            // Si la conexión ya está en progreso o establecida, ignorar SYN duplicado
-            if (existing.channel.isOpen && existing.channel.isConnectionPending) {
-                existing.lastActiveTimeMs = System.currentTimeMillis()
-                return
-            }
-            closeSession(key)
-        }
+    // ------------------------------------------------------------------ Segmentos del cliente
 
-        val channel = try {
-            SocketChannel.open().apply {
-                configureBlocking(false)
-                socket().receiveBufferSize = SOCKET_RCVBUF_BYTES
-                socketProtector.protect(socket())
+    private fun handleClientSegment(key: SessionKey, clientIp: ByteArray, serverIp: ByteArray, tcp: TcpPacket) {
+        taskQueue.checkOwnerThread()
+        val now = System.currentTimeMillis()
+        val session = sessions[key]
+        if (session == null) {
+            if (tcp.isSyn && !tcp.isAck) {
+                openSession(key, clientIp, serverIp, tcp, now)
+            } else {
+                // Segmento de una sesión que ya no existe (p. ej. conexión del pool expirada): RST.
+                TcpPacket.buildRstForSegment(tcp)?.let { sendDetached(key, clientIp, serverIp, it) }
             }
-        } catch (e: Exception) {
             return
         }
 
-        val clientSeq = tcp.sequenceNumber
-        val clientExpectedSeq = (clientSeq + 1) and 0xFFFFFFFFL
-        val serverInitialSeq = (Random.nextLong(1000, 100000)) and 0xFFFFFFFFL
+        if (session.connection.onClientSegment(tcp, now) == ClientSegmentResult.NEW_CONNECTION_REQUESTED) {
+            // El cliente abandonó la conexión anterior con la misma 4-tupla y abre otra.
+            removeSession(session)
+            openSession(key, clientIp, serverIp, tcp, now)
+            return
+        }
+        afterEvent(session)
+    }
 
-        val session = Session(
-            key = key,
-            channel = channel,
-            clientIpBytes = srcIpBytes.copyOf(),
-            serverIpBytes = dstIpBytes.copyOf(),
-            clientPort = key.clientPort,
-            serverPort = key.serverPort,
-            isIpv6 = isIpv6,
-            clientExpectedSeq = clientExpectedSeq,
-            serverSeq = serverInitialSeq,
-            synAckSent = false,
-            lastActiveTimeMs = System.currentTimeMillis()
+    private fun openSession(key: SessionKey, clientIp: ByteArray, serverIp: ByteArray, syn: TcpPacket, now: Long) {
+        val channel = try {
+            SocketChannel.open().apply { configureBlocking(false) }
+        } catch (e: IOException) {
+            diagnostics.warn("tcp.open", "No se pudo crear el socket TCP hacia ${describe(key)}", e)
+            TcpPacket.buildRstForSegment(syn)?.let { sendDetached(key, clientIp, serverIp, it) }
+            return
+        }
+        if (!environment.socketProtector.protect(channel.socket())) {
+            diagnostics.warn("tcp.protect", "protect() rechazó el socket TCP hacia ${describe(key)}")
+            closeChannelQuietly(channel)
+            TcpPacket.buildRstForSegment(syn)?.let { sendDetached(key, clientIp, serverIp, it) }
+            return
+        }
+
+        val session = Session(key, channel, clientIp.copyOf(), serverIp.copyOf())
+        session.connection = TcpConnection(
+            clientSyn = syn,
+            isIpv6 = key.isIpv6,
+            serverIsn = Random.nextLong(0L, ISN_SPACE),
+            config = tcpConfig,
+            output = session,
+            nowMs = now
         )
-
         sessions[key] = session
 
-        // Iniciar conexión física hacia el servidor exterior
         try {
-            val connected = channel.connect(InetSocketAddress(key.serverIp, key.serverPort))
-            if (connected) {
-                // Conectado de inmediato
-                sendSynAck(session)
-                pendingRegistrations.add(Runnable {
-                    try {
-                        if (channel.isOpen) {
-                            session.selectionKey = channel.register(selector, SelectionKey.OP_READ, session)
-                        }
-                    } catch (e: Exception) {
-                        closeSession(key)
-                    }
-                })
-            } else {
-                // Pendiente de conectar: registrar OP_CONNECT
-                pendingRegistrations.add(Runnable {
-                    try {
-                        if (channel.isOpen) {
-                            session.selectionKey = channel.register(
-                                selector,
-                                SelectionKey.OP_CONNECT or SelectionKey.OP_READ,
-                                session
-                            )
-                        }
-                    } catch (e: Exception) {
-                        closeSession(key)
-                    }
-                })
-            }
-            selector.wakeup()
-        } catch (e: Exception) {
-            // Rechazo inmediato: emitir RST
-            val rst = TcpPacket.buildRst(
-                srcPort = key.serverPort,
-                dstPort = key.clientPort,
-                seqNum = session.serverSeq,
-                ackNum = session.clientExpectedSeq
-            )
-            sendToTun(session, rst, isControl = true)
-            closeSession(key)
-        }
-    }
-
-    private fun sendSynAck(session: Session) {
-        if (session.synAckSent) return
-        session.synAckSent = true
-
-        val synAck = TcpPacket.buildSynAck(
-            srcPort = session.serverPort,
-            dstPort = session.clientPort,
-            seqNum = session.serverSeq,
-            ackNum = session.clientExpectedSeq,
-            windowSize = calculateAdvertisedWindow(session)
-        )
-        session.serverSeq = (session.serverSeq + 1) and 0xFFFFFFFFL
-        session.lastClientAckedSeq = session.serverSeq
-        sendToTun(session, synAck, isControl = true)
-    }
-
-    private fun handleClientAck(session: Session, tcp: TcpPacket) {
-        val ackNum = tcp.acknowledgmentNumber
-        val ackAdvance = (ackNum - session.lastClientAckedSeq).toInt()
-
-        if (ackAdvance > 0) {
-            val it = session.unackedDownlinkSegments.entries.iterator()
-            while (it.hasNext()) {
-                val entry = it.next()
-                val segEnd = (entry.key + entry.value.size) and 0xFFFFFFFFL
-                if ((ackNum - segEnd).toInt() >= 0) {
-                    session.unackedDownlinkBytes = (session.unackedDownlinkBytes - entry.value.size).coerceAtLeast(0)
-                    it.remove()
-                } else {
-                    break
-                }
-            }
-            session.lastClientAckedSeq = ackNum
-            session.dupAckCount = 0
-            session.lastRetransmitTimeMs = System.currentTimeMillis()
-        } else if (ackAdvance == 0 && tcp.payload.isEmpty() && !tcp.isSyn && !tcp.isFin) {
-            val missingPayload = session.unackedDownlinkSegments[ackNum] ?: return
-            session.dupAckCount++
-            if (session.dupAckCount >= 3) {
-                session.dupAckCount = 0
-                session.lastRetransmitTimeMs = System.currentTimeMillis()
-                val retransmit = TcpPacket.buildPshAck(
-                    srcPort = session.serverPort,
-                    dstPort = session.clientPort,
-                    seqNum = ackNum,
-                    ackNum = session.clientExpectedSeq,
-                    payload = missingPayload,
-                    windowSize = calculateAdvertisedWindow(session)
-                )
-                sendToTun(session, retransmit)
-            }
-        }
-    }
-
-    private fun handleData(session: Session, tcp: TcpPacket) {
-        val payload = tcp.payload
-        val seq = tcp.sequenceNumber
-        val payloadEnd = (seq + payload.size) and 0xFFFFFFFFL
-
-        // 1. Deduplicación: Si los datos recibidos caen en un rango de secuencia ya confirmado,
-        // responder con ACK acumulativo sin reenviar datos duplicados al SocketChannel.
-        val consumedDiff = (session.clientExpectedSeq - payloadEnd).toInt()
-        if (consumedDiff >= 0) {
-            val ack = TcpPacket.buildAck(
-                srcPort = session.serverPort,
-                dstPort = session.clientPort,
-                seqNum = session.serverSeq,
-                ackNum = session.clientExpectedSeq,
-                windowSize = calculateAdvertisedWindow(session)
-            )
-            sendToTun(session, ack, isControl = true)
-            return
-        }
-
-        // 2. Comprobar si hay un hueco (out-of-order segment)
-        val seqGap = (seq - session.clientExpectedSeq).toInt()
-        if (seqGap > 0) {
-            // Buffer de desorden: retener segmento si cabe en el búfer
-            synchronized(session.outOfOrderBuffer) {
-                if (session.outOfOrderBufferedBytes + payload.size <= MAX_PENDING_WRITES_BYTES) {
-                    if (!session.outOfOrderBuffer.containsKey(seq)) {
-                        session.outOfOrderBuffer[seq] = payload
-                        session.outOfOrderBufferedBytes += payload.size
-                    }
-                }
-            }
-            // Enviar ACK duplicado para señalar el hueco manteniendo clientExpectedSeq continuo
-            val ack = TcpPacket.buildAck(
-                srcPort = session.serverPort,
-                dstPort = session.clientPort,
-                seqNum = session.serverSeq,
-                ackNum = session.clientExpectedSeq,
-                windowSize = calculateAdvertisedWindow(session)
-            )
-            sendToTun(session, ack, isControl = true)
-            return
-        }
-
-        // 3. Segmento contiguo (seq <= clientExpectedSeq && payloadEnd > clientExpectedSeq)
-        val sliceOffset = (session.clientExpectedSeq - seq).toInt()
-        val slice = if (sliceOffset > 0) payload.copyOfRange(sliceOffset, payload.size) else payload
-
-        writePayloadToChannel(session, slice)
-        session.clientExpectedSeq = payloadEnd
-
-        // 4. Drenar segmentos contiguos acumulados en outOfOrderBuffer
-        synchronized(session.outOfOrderBuffer) {
-            while (true) {
-                val nextEntry = session.outOfOrderBuffer.firstEntry() ?: break
-                val nextSeq = nextEntry.key
-                val nextData = nextEntry.value
-                val nextEnd = (nextSeq + nextData.size) and 0xFFFFFFFFL
-
-                val diff = (session.clientExpectedSeq - nextSeq).toInt()
-                if (diff >= 0) {
-                    session.outOfOrderBuffer.remove(nextSeq)
-                    session.outOfOrderBufferedBytes -= nextData.size
-
-                    val overlap = (session.clientExpectedSeq - nextSeq).toInt()
-                    if (nextEnd > session.clientExpectedSeq) {
-                        val contiguousSlice = if (overlap > 0) nextData.copyOfRange(overlap, nextData.size) else nextData
-                        writePayloadToChannel(session, contiguousSlice)
-                        session.clientExpectedSeq = nextEnd
-                    }
-                } else {
-                    break
-                }
-            }
-        }
-
-        // 5. Enviar ACK acumulativo con la secuencia continua confirmada
-        val ack = TcpPacket.buildAck(
-            srcPort = session.serverPort,
-            dstPort = session.clientPort,
-            seqNum = session.serverSeq,
-            ackNum = session.clientExpectedSeq,
-            windowSize = calculateAdvertisedWindow(session)
-        )
-        sendToTun(session, ack, isControl = true)
-    }
-
-    private fun writePayloadToChannel(session: Session, payload: ByteArray) {
-        if (payload.isEmpty()) return
-        val writeBuffer = ByteBuffer.wrap(payload)
-        try {
-            if (session.channel.isConnected) {
-                session.channel.write(writeBuffer)
-            }
-            if (writeBuffer.hasRemaining()) {
-                session.pendingWrites.add(writeBuffer)
-                session.selectionKey?.let { key ->
-                    key.interestOps(key.interestOps() or SelectionKey.OP_WRITE)
-                }
-            }
+            val connected = channel.connect(InetSocketAddress(InetAddress.getByAddress(serverIp), key.serverPort))
+            val interest = if (connected) SelectionKey.OP_READ else SelectionKey.OP_CONNECT
+            session.selectionKey = channel.register(selector, interest, session)
+            if (connected) session.connection.onUpstreamConnected(now)
         } catch (e: IOException) {
-            closeSession(session.key)
+            diagnostics.warn("tcp.connect", "Conexión rechazada hacia ${describe(key)}: ${e.message}", e)
+            session.connection.abort()
         }
     }
 
-    private fun handleFin(session: Session, tcp: TcpPacket) {
-        session.clientExpectedSeq = (tcp.sequenceNumber + 1) and 0xFFFFFFFFL
-
-        // Acknowledge FIN
-        val ack = TcpPacket.buildAck(
-            srcPort = session.serverPort,
-            dstPort = session.clientPort,
-            seqNum = session.serverSeq,
-            ackNum = session.clientExpectedSeq,
-            windowSize = calculateAdvertisedWindow(session)
-        )
-        sendToTun(session, ack, isControl = true)
-
-        // Cerrar salida en el canal exterior
-        try {
-            session.channel.shutdownOutput()
-        } catch (e: Exception) {
-            // Ignorar
-        }
-    }
-
-    private fun sendToTun(session: Session, tcpPacket: TcpPacket, isControl: Boolean = false) {
-        val packetBytes = if (session.isIpv6) {
-            tcpPacket.toIpv6Packet(session.serverIpBytes, session.clientIpBytes).toByteArray()
+    /** Envía un segmento de control que no pertenece a ninguna sesión (RST de respuesta). */
+    private fun sendDetached(key: SessionKey, clientIp: ByteArray, serverIp: ByteArray, segment: TcpPacket) {
+        val packet = if (key.isIpv6) {
+            segment.toIpv6Packet(serverIp, clientIp).toByteArray()
         } else {
-            tcpPacket.toIpPacket(session.serverIpBytes, session.clientIpBytes).toByteArray()
+            segment.toIpPacket(serverIp, clientIp).toByteArray()
         }
-        if (isControl) {
-            onControlPacket(packetBytes)
-        } else {
-            onInboundPacket(packetBytes)
-        }
+        onControlPacket(packet)
     }
 
-    private fun calculateAdvertisedWindow(session: Session): Int {
-        var pendingBytes = 0
-        for (buf in session.pendingWrites) {
-            pendingBytes += buf.remaining()
+    /** Tras cada evento: aplicar fallos de I/O diferidos y reanudar lecturas si hay ventana. */
+    private fun afterEvent(session: Session) {
+        if (session.removed) return
+        val failure = session.ioFailure
+        if (failure != null) {
+            diagnostics.warn("tcp.write", "Fallo al escribir hacia ${describe(session.key)}: ${failure.message}", failure)
+            session.connection.abort()
+            return
         }
-        pendingBytes += session.outOfOrderBufferedBytes
-        return when {
-            pendingBytes >= MAX_PENDING_WRITES_BYTES -> 0 // Zero-Window para pausar emisor
-            pendingBytes >= (MAX_PENDING_WRITES_BYTES / 2) -> (MAX_WINDOW_SIZE / 4)
-            else -> MAX_WINDOW_SIZE
-        }
+        resumeReadsIfPossible(session)
     }
 
+    // ------------------------------------------------------------------ Bucle del selector
+
+    @Suppress("TooGenericExceptionCaught")
     private fun startWorkerLoop() {
-        workerJob = coroutineScope.launch(Dispatchers.IO) {
+        workerJob = environment.coroutineScope.launch(Dispatchers.IO) {
+            taskQueue.bindToCurrentThread()
             while (isActive && isRunning) {
                 try {
-                    // Procesar registros pendientes en el selector
-                    while (true) {
-                        val task = pendingRegistrations.poll() ?: break
-                        task.run()
+                    loopIterations.incrementAndGet()
+                    taskQueue.runPending()
+                    if (selector.select(selectTimeoutMs()) > 0) {
+                        handleSelectedKeys()
                     }
-
-                    val readyCount = selector.select(SELECTOR_TIMEOUT_MS)
-                    if (readyCount > 0) {
-                        val keys = selector.selectedKeys().iterator()
-                        while (keys.hasNext()) {
-                            val key = keys.next()
-                            keys.remove()
-
-                            if (!key.isValid) continue
-
-                            val session = key.attachment() as? Session ?: continue
-
-                            if (key.isConnectable) {
-                                handleConnect(key, session)
-                            }
-
-                            if (key.isValid && key.isWritable) {
-                                handleWrite(key, session)
-                            }
-
-                            if (key.isValid && key.isReadable) {
-                                if (canReadDownlink() && session.unackedDownlinkBytes < MAX_UNACKED_DOWNLINK_BYTES) {
-                                    handleRead(session)
-                                }
-                            }
-                        }
-                    }
-                    checkRetransmissionTimeouts()
+                    runTimers()
                 } catch (e: ClosedSelectorException) {
                     break
-                } catch (e: Exception) {
-                    // Continuar en caso de fallo transitorio
+                } catch (e: IOException) {
+                    diagnostics.warn("tcp.selector", "Error de I/O en el selector TCP", e)
+                } catch (e: RuntimeException) {
+                    // Un error con un segmento concreto no debe detener el reenvío TCP.
+                    diagnostics.error("tcp.loop", "Error inesperado en el bucle TCP", e)
                 }
             }
         }
     }
 
-    private fun handleConnect(key: SelectionKey, session: Session) {
+    private fun handleSelectedKeys() {
+        val keys = selector.selectedKeys().iterator()
+        while (keys.hasNext()) {
+            val selKey = keys.next()
+            keys.remove()
+            val session = selKey.attachment() as? Session ?: continue
+            if (selKey.isValid && selKey.isConnectable) handleConnect(session)
+            if (selKey.isValid && selKey.isWritable) handleWrite(session)
+            if (selKey.isValid && selKey.isReadable) handleRead(session)
+            afterEvent(session)
+        }
+    }
+
+    /**
+     * Espera del selector: hasta el próximo temporizador de cualquier sesión, acotada a [5, 250] ms.
+     * Si hay lecturas pausadas por la bajada se sondea cada 5 ms hasta que llegue [resumeReads].
+     */
+    private fun selectTimeoutMs(): Long {
+        val now = System.currentTimeMillis()
+        var timeout = MAX_SELECT_TIMEOUT_MS
+        for (session in sessions.values) {
+            if (session.readsPaused && !canReadDownlink()) timeout = MIN_SELECT_TIMEOUT_MS
+            val deadline = session.connection.nextDeadlineMs() ?: continue
+            timeout = minOf(timeout, deadline - now)
+        }
+        return timeout.coerceIn(MIN_SELECT_TIMEOUT_MS, MAX_SELECT_TIMEOUT_MS)
+    }
+
+    private fun runTimers() {
+        val now = System.currentTimeMillis()
+        for (session in sessions.values) {
+            val deadline = session.connection.nextDeadlineMs() ?: continue
+            if (now >= deadline) session.connection.onTimer(now)
+            if (session.readsPaused) resumeReadsIfPossible(session)
+        }
+    }
+
+    // ------------------------------------------------------------------ Socket exterior
+
+    private fun handleConnect(session: Session) {
         try {
             if (session.channel.finishConnect()) {
-                key.interestOps(SelectionKey.OP_READ)
-                sendSynAck(session)
-                flushPendingWrites(key, session)
+                session.selectionKey?.interestOps(SelectionKey.OP_READ)
+                session.connection.onUpstreamConnected(System.currentTimeMillis())
             }
         } catch (e: IOException) {
-            key.cancel()
-            // Enviar RST al TUN si falló la conexión al servidor
-            val rst = TcpPacket.buildRst(
-                srcPort = session.serverPort,
-                dstPort = session.clientPort,
-                seqNum = session.serverSeq,
-                ackNum = session.clientExpectedSeq
-            )
-            sendToTun(session, rst, isControl = true)
-            closeSession(session.key)
+            diagnostics.warn("tcp.connect", "finishConnect falló hacia ${describe(session.key)}: ${e.message}", e)
+            session.connection.abort()
         }
-    }
-
-    private fun handleWrite(key: SelectionKey, session: Session) {
-        try {
-            flushPendingWrites(key, session)
-        } catch (e: IOException) {
-            closeSession(session.key)
-        }
-    }
-
-    private fun flushPendingWrites(key: SelectionKey, session: Session) {
-        while (true) {
-            val buffer = session.pendingWrites.peek() ?: break
-            session.channel.write(buffer)
-            if (buffer.hasRemaining()) {
-                key.interestOps(key.interestOps() or SelectionKey.OP_WRITE)
-                return
-            } else {
-                session.pendingWrites.poll()
-            }
-        }
-        key.interestOps(key.interestOps() and SelectionKey.OP_WRITE.inv())
     }
 
     private fun handleRead(session: Session) {
+        val window = session.connection.availableSendWindow()
+        if (window <= 0 || !canReadDownlink()) {
+            pauseReads(session)
+            return
+        }
         val buffer = bufferPool.acquire()
         try {
-            buffer.limit(TCP_MAX_SEGMENT_SIZE)
+            buffer.limit(minOf(window, buffer.capacity()))
             val bytesRead = session.channel.read(buffer)
+            val now = System.currentTimeMillis()
             if (bytesRead > 0) {
-                session.lastActiveTimeMs = System.currentTimeMillis()
                 buffer.flip()
                 val data = ByteArray(buffer.remaining())
                 buffer.get(data)
-
-                // Dividir en segmentos con tamaño máximo de MSS (1360 bytes para MTU 1500)
-                var offset = 0
-                val window = calculateAdvertisedWindow(session)
-                while (offset < data.size) {
-                    val chunkSize = minOf(TCP_MAX_SEGMENT_SIZE, data.size - offset)
-                    val chunk = data.copyOfRange(offset, offset + chunkSize)
-                    val seq = session.serverSeq
-
-                    if (!session.unackedDownlinkSegments.containsKey(seq)) {
-                        session.unackedDownlinkSegments[seq] = chunk
-                        session.unackedDownlinkBytes += chunk.size
-                    }
-
-                    val pshAck = TcpPacket.buildPshAck(
-                        srcPort = session.serverPort,
-                        dstPort = session.clientPort,
-                        seqNum = seq,
-                        ackNum = session.clientExpectedSeq,
-                        payload = chunk,
-                        windowSize = window
-                    )
-                    session.serverSeq = (seq + chunk.size) and 0xFFFFFFFFL
-                    sendToTun(session, pshAck)
-
-                    offset += chunkSize
-                }
+                session.connection.onServerData(data, now)
             } else if (bytesRead < 0) {
-                // El servidor cerró la conexión (EOF): enviar FIN-ACK hacia el TUN
-                val finAck = TcpPacket.buildFinAck(
-                    srcPort = session.serverPort,
-                    dstPort = session.clientPort,
-                    seqNum = session.serverSeq,
-                    ackNum = session.clientExpectedSeq,
-                    windowSize = calculateAdvertisedWindow(session)
-                )
-                session.serverSeq = (session.serverSeq + 1) and 0xFFFFFFFFL
-                sendToTun(session, finAck, isControl = true)
-                closeSession(session.key)
+                // EOF del servidor: dejar de vigilar OP_READ (un canal en EOF siempre está "legible").
+                session.serverEof = true
+                session.setInterest(SelectionKey.OP_READ, enabled = false)
+                session.connection.onServerEof(now)
             }
         } catch (e: IOException) {
-            closeSession(session.key)
+            diagnostics.warn("tcp.read", "Fallo al leer de ${describe(session.key)}: ${e.message}", e)
+            session.connection.abort()
         } finally {
             bufferPool.release(buffer)
         }
     }
 
-    private fun checkRetransmissionTimeouts() {
-        val now = System.currentTimeMillis()
-        for (session in sessions.values) {
-            val firstEntry = session.unackedDownlinkSegments.firstEntry() ?: continue
-            if (now - session.lastRetransmitTimeMs >= RETRANSMIT_TIMEOUT_MS) {
-                session.lastRetransmitTimeMs = now
-                val retransmit = TcpPacket.buildPshAck(
-                    srcPort = session.serverPort,
-                    dstPort = session.clientPort,
-                    seqNum = firstEntry.key,
-                    ackNum = session.clientExpectedSeq,
-                    payload = firstEntry.value,
-                    windowSize = calculateAdvertisedWindow(session)
-                )
-                sendToTun(session, retransmit)
-            }
-        }
-    }
-
-    private fun startCleanupLoop() {
-        cleanupJob = coroutineScope.launch(Dispatchers.IO) {
-            while (isActive && isRunning) {
-                delay(CLEANUP_INTERVAL_MS)
-                val now = System.currentTimeMillis()
-                val it = sessions.entries.iterator()
-                while (it.hasNext()) {
-                    val entry = it.next()
-                    if (now - entry.value.lastActiveTimeMs > SESSION_TIMEOUT_MS) {
-                        try {
-                            entry.value.channel.close()
-                        } catch (e: Exception) {
-                            // Ignorar
-                        }
-                        it.remove()
-                    }
-                }
-            }
-        }
-    }
-
-    private fun closeSession(key: SessionKey) {
-        val session = sessions.remove(key)
+    private fun handleWrite(session: Session) {
         try {
-            session?.channel?.close()
-        } catch (e: Exception) {
-            // Ignorar
+            while (true) {
+                val buffer = session.pendingWrites.firstOrNull() ?: break
+                val written = session.channel.write(buffer)
+                session.pendingWriteBytes -= written
+                if (buffer.hasRemaining()) break
+                session.pendingWrites.removeFirst()
+            }
+        } catch (e: IOException) {
+            session.ioFailure = e
+            return
         }
-        session?.outOfOrderBuffer?.clear()
-        session?.outOfOrderBufferedBytes = 0
-        session?.unackedDownlinkSegments?.clear()
-        session?.unackedDownlinkBytes = 0
+        if (session.pendingWrites.isEmpty()) {
+            session.setInterest(SelectionKey.OP_WRITE, enabled = false)
+            if (session.shutdownAfterFlush) shutdownChannelOutput(session)
+        }
+        session.connection.onServerWriteProgress(session.pendingWriteBytes)
     }
+
+    private fun pauseReads(session: Session) {
+        session.readsPaused = true
+        session.setInterest(SelectionKey.OP_READ, enabled = false)
+    }
+
+    private fun resumeReadsIfPossible(session: Session) {
+        if (!session.readsPaused || session.serverEof || session.removed) return
+        if (session.connection.availableSendWindow() <= 0 || !canReadDownlink()) return
+        session.readsPaused = false
+        session.setInterest(SelectionKey.OP_READ, enabled = true)
+    }
+
+    private fun shutdownChannelOutput(session: Session) {
+        session.shutdownAfterFlush = false
+        try {
+            session.channel.shutdownOutput()
+        } catch (e: IOException) {
+            diagnostics.log(DiagLevel.DEBUG, "tcp.shutdown", "shutdownOutput falló hacia ${describe(session.key)}", e)
+        }
+    }
+
+    // ------------------------------------------------------------------ Cierre
+
+    private fun removeSession(session: Session) {
+        if (session.removed) return
+        session.removed = true
+        if (sessions[session.key] === session) sessions.remove(session.key)
+        session.selectionKey?.cancel()
+        closeChannelQuietly(session.channel)
+        session.pendingWrites.clear()
+        session.pendingWriteBytes = 0
+    }
+
+    private fun closeChannelQuietly(channel: SocketChannel) {
+        try {
+            channel.close()
+        } catch (e: IOException) {
+            diagnostics.log(DiagLevel.DEBUG, "tcp.close", "Error al cerrar un socket TCP", e)
+        }
+    }
+
+    private fun describe(key: SessionKey): String =
+        if (key.isIpv6) "[${key.serverIp}]:${key.serverPort}" else "${key.serverIp}:${key.serverPort}"
 
     fun close() {
         isRunning = false
         workerJob?.cancel()
-        cleanupJob?.cancel()
         workerJob = null
-        cleanupJob = null
+        taskQueue.clear()
 
-        sessions.values.forEach {
-            try {
-                it.channel.close()
-            } catch (e: Exception) {
-                // Ignorar
-            }
-        }
+        sessions.values.forEach { closeChannelQuietly(it.channel) }
         sessions.clear()
 
         try {
             selector.close()
-        } catch (e: Exception) {
-            // Ignorar
+        } catch (e: IOException) {
+            diagnostics.log(DiagLevel.DEBUG, "tcp.close", "Error al cerrar el selector TCP", e)
         }
     }
 
     companion object {
-        private const val MAX_WINDOW_SIZE = 65535
-        private const val MAX_PENDING_WRITES_BYTES = 65536 // 64 KB
-        private const val SOCKET_RCVBUF_BYTES = 16384 // 16 KB para acotar bufferbloat en el kernel
-        private const val MAX_UNACKED_DOWNLINK_BYTES = 32768 // 32 KB en vuelo por flujo
-        private const val RETRANSMIT_TIMEOUT_MS = 250L
-        private const val TCP_MAX_SEGMENT_SIZE = 1360
-        private const val SELECTOR_TIMEOUT_MS = 2L
-        private const val SESSION_TIMEOUT_MS = 60_000L // 60 segundos de inactividad
-        private const val CLEANUP_INTERVAL_MS = 5_000L
+        private const val ISN_SPACE = 1L shl 32
+        private const val MIN_SELECT_TIMEOUT_MS = 5L
+        private const val MAX_SELECT_TIMEOUT_MS = 250L
     }
 }
-
