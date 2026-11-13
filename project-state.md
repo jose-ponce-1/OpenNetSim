@@ -69,10 +69,21 @@ Aplicación Android moderna (Kotlin + Jetpack Compose) que simula condiciones de
   - Soporte transparente para conexiones salientes tanto IPv4 como IPv6.
 - [x] Validación completa de compilación y ejecución de tests unitarios (`testDebugUnitTest` y `assembleDebug`).
 
+### Fase 7: Conectividad y Caudal del Túnel (cambio OpenSpec `fix-tunnel-connectivity-throughput`)
+- [x] Estabilidad: bucles del servicio resilientes a errores por paquete, token bucket con déficit (un paquete mayor que la ráfaga ya no bloquea la bajada) y RST en toda sesión TCP descartada o desconocida.
+- [x] Núcleo TCP puro en `core/tcp/` (`TcpConnection`, RTO RFC 6298 con Karn, reensamblado, FIN ordenado, retransmisión de SYN-ACK/FIN, ventana según BDP, sonda de ventana cero) y `TcpForwarder` reducido a capa de I/O.
+- [x] Opciones MSS y window scale en el SYN-ACK; sin `SO_RCVBUF` fijo; selector sin giro en vacío.
+- [x] Planificador de dos carriles (interactivo / masivo) con orden por flujo y cota de cola por tiempo `max(2 × MTU, tasa × (500 ms + latencia + jitter))`; el lector del TUN nunca espera.
+- [x] UDP: alta de sesiones sin bloqueo (modelo actor), datagramas de hasta 64 KB entregados enteros e ICMP de destino inalcanzable.
+- [x] Ciclo de vida: `TunnelState` real hacia la UI, IPv6 solo si la red física lo tiene (`NetworkCallback`), `setMetered(false)`, debounce de sliders, telemetría por dirección sin retransmisiones y diagnóstico en Logcat (`OpenNetSim`).
+- [x] 126 tests JVM en verde (1 omitido en Windows: ICMP por loopback) y `assembleDebug` correcto.
+- [ ] Verificación en emulador/dispositivo (tareas 9.2, 11.2 y 12.3 del cambio).
+- [ ] `ktlintCheck` y `detekt` siguen fallando por deuda previa (466 infracciones anteriores al cambio; este cambio no añade ninguna).
+
 ---
 
 ## Punto de Retorno (Checkpoint)
-- **Últimos archivos modificados:** Módulos `core/buffer`, `core/engine`, `core/packet`, `service/forwarder` y `service/ThrottleVpnService.kt` (Fase 6 completada).
-- **Estado General:** **100% COMPLETADO**. Deuda técnica totalmente resuelta. Motor bidireccional simétrico, buffer pooling activo, soporte nativo IPv4/IPv6, ICMP ping operativo y control de flujo TCP implementado.
-- **Artefacto de Distribución:** APK de depuración actualizado exitosamente en `app/build/outputs/apk/debug/app-debug.apk`.
-- **Siguiente acción inmediata:** Pruebas en vivo en dispositivo físico o emulador con comandos `ping` y tráfico web concurrente.
+- **Últimos archivos modificados:** `core/engine`, `core/packet`, `core/tcp` (nuevo), `service/` (`ThrottleVpnService`, forwarders, `diag/`, `network/`), `ui/` y `model/` (Fase 7, sin commitear).
+- **Estado General:** Fase 7 implementada y probada en JVM; pendiente la validación en emulador/dispositivo.
+- **Artefacto de Distribución:** APK de depuración en `app/build/outputs/apk/debug/app-debug.apk`.
+- **Siguiente acción inmediata:** Pruebas en vivo (emulador solo IPv4 y dispositivo físico) con cada preset: navegación, descarga larga (objetivo ≥ 80 % del caudal configurado en "Alta Latencia"), subida, `ping` y conexión persistente inactiva más de 60 s.

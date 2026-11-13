@@ -10,8 +10,14 @@ data class DelayedPacket(
     val data: ByteArray,
     val scheduledReleaseTimeMs: Long,
     val originalTimestampMs: Long,
-    val sequenceNumber: Long
+    val sequenceNumber: Long,
+    val flowId: Long = NO_FLOW
 ) : Comparable<DelayedPacket> {
+    companion object {
+        /** Paquete sin flujo de transporte identificado. */
+        const val NO_FLOW: Long = Long.MIN_VALUE
+    }
+
     override fun compareTo(other: DelayedPacket): Int {
         val timeCmp = scheduledReleaseTimeMs.compareTo(other.scheduledReleaseTimeMs)
         return if (timeCmp != 0) timeCmp else sequenceNumber.compareTo(other.sequenceNumber)
@@ -85,13 +91,15 @@ class LatencyQueue(
     fun enqueueWithScheduledTime(
         data: ByteArray,
         scheduledReleaseTimeMs: Long,
-        originalTimestampMs: Long = timeSourceMs()
+        originalTimestampMs: Long = timeSourceMs(),
+        flowId: Long = DelayedPacket.NO_FLOW
     ): DelayedPacket {
         val delayedPacket = DelayedPacket(
             data = data,
             scheduledReleaseTimeMs = scheduledReleaseTimeMs,
             originalTimestampMs = originalTimestampMs,
-            sequenceNumber = sequenceCounter++
+            sequenceNumber = sequenceCounter++,
+            flowId = flowId
         )
 
         queue.add(delayedPacket)
@@ -155,6 +163,10 @@ class LatencyQueue(
         }
         return ready
     }
+
+    /** Tamaño en bytes del paquete en cabeza de la cola, o null si está vacía. */
+    @Synchronized
+    fun peekHeadSize(): Int? = queue.peek()?.data?.size
 
     /**
      * Devuelve el tiempo restante en milisegundos hasta que el próximo paquete en la cola esté listo,

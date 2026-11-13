@@ -112,6 +112,56 @@ class TokenBucketLimiterTest {
     }
 
     @Test
+    fun testOversizedPacketIsAdmittedWithDeficitAndDelaysNextPacket() {
+        // 128 kbps = 16_000 B/s; ráfaga por defecto = max(1500, 16_000 / 20) = 1500 B
+        val limiter = TokenBucketLimiter(
+            bytesPerSecond = 16_000L,
+            timeSourceNanos = { simulatedTimeNanos }
+        )
+        assertEquals(1500L, limiter.burstCapacityBytes)
+        assertTrue(limiter.tryConsume(1500)) // vaciar el bucket
+
+        // Un paquete de 3000 B (> ráfaga) solo necesita 1500 tokens para ser admitido: 93,75 ms
+        assertFalse(limiter.tryConsume(3000))
+        assertEquals(94L, limiter.calculateWaitTimeMs(3000))
+        simulatedTimeNanos += 93_750_000L
+        assertTrue("El paquete grande no debe bloquearse nunca", limiter.tryConsume(3000))
+        assertEquals(-1500.0, limiter.currentTokens, 0.001)
+
+        // El siguiente paquete paga la deuda: (1500 + 100) / 16_000 = 100 ms
+        assertEquals(100L, limiter.calculateWaitTimeMs(100))
+
+        // Paquete grande + siguiente ≈ 190 ms de serialización: (3000 + 100) / 16_000 s
+        val totalNanos = 93_750_000L + limiter.calculateWaitTimeNanos(100)
+        assertEquals(193_750_000.0, totalNanos.toDouble(), 1_000_000.0)
+    }
+
+    @Test
+    fun testMeanRateMatchesConfiguredRateWithOversizedPackets() {
+        val bytesPerSec = 16_000L
+        val limiter = TokenBucketLimiter(
+            bytesPerSecond = bytesPerSec,
+            timeSourceNanos = { simulatedTimeNanos }
+        )
+        assertTrue(limiter.tryConsume(1500)) // partir del bucket vacío
+        val startNanos = simulatedTimeNanos
+
+        var sentBytes = 0L
+        repeat(100) { index ->
+            val size = if (index % 10 == 0) 3000 else 1000
+            simulatedTimeNanos += limiter.calculateWaitTimeNanos(size)
+            assertTrue(limiter.tryConsume(size))
+            sentBytes += size
+        }
+        // El último paquete deja deuda: se cuenta el tiempo hasta pagarla.
+        simulatedTimeNanos += limiter.calculateWaitTimeNanos(1)
+
+        val elapsedSec = (simulatedTimeNanos - startNanos) / 1_000_000_000.0
+        val measuredRate = sentBytes / elapsedSec
+        assertEquals(bytesPerSec.toDouble(), measuredRate, bytesPerSec * 0.02)
+    }
+
+    @Test
     fun testDynamicRateUpdate() {
         val limiter = createLimiter(bytesPerSec = 1000, burstCapacity = 1000)
 

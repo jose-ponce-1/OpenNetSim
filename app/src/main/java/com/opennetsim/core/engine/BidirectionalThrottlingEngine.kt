@@ -18,16 +18,28 @@ class BidirectionalThrottlingEngine(
     /**
      * Procesa un paquete saliente (Uplink: TUN -> exterior).
      */
-    fun processUplink(packet: ByteArray, currentTimeMs: Long = timeSourceMs()): PacketResult {
-        return uplinkEngine.processIncoming(packet, currentTimeMs)
-    }
+    fun processUplink(
+        packet: ByteArray,
+        currentTimeMs: Long = timeSourceMs(),
+        trafficClass: TrafficClass = TrafficClass.BULK,
+        flowId: Long = DelayedPacket.NO_FLOW
+    ): PacketResult = uplinkEngine.processIncoming(packet, currentTimeMs, trafficClass, flowId)
 
     /**
      * Procesa un paquete entrante (Downlink: exterior -> TUN).
      */
-    fun processDownlink(packet: ByteArray, currentTimeMs: Long = timeSourceMs()): PacketResult {
-        return downlinkEngine.processIncoming(packet, currentTimeMs)
-    }
+    fun processDownlink(
+        packet: ByteArray,
+        currentTimeMs: Long = timeSourceMs(),
+        trafficClass: TrafficClass = TrafficClass.BULK,
+        flowId: Long = DelayedPacket.NO_FLOW
+    ): PacketResult = downlinkEngine.processIncoming(packet, currentTimeMs, trafficClass, flowId)
+
+    /**
+     * True mientras la bajada admite más datos masivos (por debajo del 75 % de su cota): los
+     * forwarders pueden seguir leyendo de los sockets exteriores.
+     */
+    val downlinkHasCapacity: Boolean get() = downlinkEngine.hasCapacity
 
     /**
      * Drena paquetes listos para ser enviados al exterior (Uplink).
@@ -108,9 +120,13 @@ class BidirectionalThrottlingEngine(
     }
 
     companion object {
+        /**
+         * @param timeSourceNanos Reloj monotónico del token bucket; los tests lo derivan del reloj simulado.
+         */
         fun fromConfig(
             config: ThrottleConfig,
-            timeSourceMs: () -> Long = System::currentTimeMillis
+            timeSourceMs: () -> Long = System::currentTimeMillis,
+            timeSourceNanos: () -> Long = System::nanoTime
         ): BidirectionalThrottlingEngine {
             val halfLatency = config.latencyMs / 2
             val halfJitter = config.jitterMs / 2
@@ -120,7 +136,8 @@ class BidirectionalThrottlingEngine(
                 latencyMs = halfLatency,
                 jitterMs = halfJitter,
                 packetLossPercent = config.packetLossPercent,
-                timeSourceMs = timeSourceMs
+                timeSourceMs = timeSourceMs,
+                timeSourceNanos = timeSourceNanos
             )
 
             val downlink = ThrottlingEngine.createPipeline(
@@ -128,7 +145,8 @@ class BidirectionalThrottlingEngine(
                 latencyMs = halfLatency,
                 jitterMs = halfJitter,
                 packetLossPercent = config.packetLossPercent,
-                timeSourceMs = timeSourceMs
+                timeSourceMs = timeSourceMs,
+                timeSourceNanos = timeSourceNanos
             )
 
             return BidirectionalThrottlingEngine(

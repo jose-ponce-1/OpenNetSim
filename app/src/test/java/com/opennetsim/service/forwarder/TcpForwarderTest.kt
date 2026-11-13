@@ -42,8 +42,11 @@ class TcpForwarderTest {
         serverPort = serverSocket.localPort
 
         forwarder = TcpForwarder(
-            socketProtector = protector,
-            coroutineScope = scope,
+            environment = ForwarderEnvironment(
+                socketProtector = protector,
+                coroutineScope = scope,
+                strictThreadChecks = true
+            ),
             onInboundPacket = { inboundTunPackets.add(it) }
         )
     }
