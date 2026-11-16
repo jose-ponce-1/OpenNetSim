@@ -12,4 +12,4 @@
 
 ## 3. CI
 - [x] 3.1 Crear `.github/workflows/ci.yml` y marcar `gradlew` como ejecutable; verificar con `git ls-files -s gradlew` (modo 100755)
-- [ ] 3.2 Tras el primer push, verificar que el workflow "CI" termina en verde en GitHub Actions
+- [x] 3.2 Tras el primer push, verificar que el workflow "CI" termina en verde en GitHub Actions — ejecución 43981166816 en verde (17/11/2026); la primera falló por una carrera del test `exteriorSocketErrorResetsClient` en Linux, corregida en `7c208be`
