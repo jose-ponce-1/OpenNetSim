@@ -11,4 +11,4 @@
 
 ## 3. Verificación
 - [x] 3.1 Ejecutar `testDebugUnitTest`, `detekt` y `lintDebug`; verificar que terminan bien
-- [ ] 3.2 En dispositivo o emulador: conexión websocket inactiva 30 min sin cortes; ráfaga de 2000 consultas DNS (`dig`) sin errores de descriptores; verificar en Logcat (etiqueta `OpenNetSim`)
+- [x] 3.2 En dispositivo o emulador: conexión websocket inactiva 30 min sin cortes; ráfaga de 2000 consultas DNS (`dig`) sin errores de descriptores; verificar en Logcat (etiqueta `OpenNetSim`) — verificado por el usuario en dispositivo con `app-debug.apk` (17/11/2026: "todo funciona")

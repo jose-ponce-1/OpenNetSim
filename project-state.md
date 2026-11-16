@@ -88,12 +88,12 @@ Aplicación Android moderna (Kotlin + Jetpack Compose) que simula condiciones de
 - [x] `decouple-tunnel-service`: `TunnelController` entre UI y servicio; `TunnelPipeline` sin Android y probado en JVM; servicio de 748 a 361 líneas.
 - [x] `add-quality-gate`: un solo formateador (detekt-formatting), baseline de detekt, sin BOM, `.editorconfig`, `kotlinx-coroutines-test` y GitHub Actions.
 - [x] 152 tests JVM en verde (1 omitido en Windows), `detekt` y `lintDebug` sin errores.
-- [ ] Verificación en dispositivo de los cinco cambios (última tarea de cada `tasks.md`) y primera ejecución de la CI en GitHub; después, archivarlos con `/opsx:archive`.
+- [x] Verificación en dispositivo con `app-debug.apk` (usuario, 17/11/2026: todo funciona) y CI de GitHub Actions en verde; los cinco cambios archivados en `openspec/changes/archive/2026-11-17-*`.
 
 ---
 
 ## Punto de Retorno (Checkpoint)
-- **Últimos archivos modificados:** `core/time/` (nuevo), `core/engine/`, `tunnel/` (nuevo), `service/` (servicio, `pipeline/` nuevo, forwarders), `ui/`, `config/detekt/`, `.github/workflows/ci.yml` (Fase 8, sin commitear en `fix/audit-corrections`).
-- **Estado General:** Fases 1–7 cerradas; Fase 8 implementada y probada en JVM, pendiente de verificación en dispositivo.
+- **Últimos archivos modificados:** `core/time/`, `core/engine/`, `tunnel/`, `service/` (`pipeline/`, forwarders), `ui/`, `config/detekt/`, `.github/workflows/ci.yml` y `openspec/` (Fase 8, PR #3 de `fix/audit-corrections` hacia `develop`).
+- **Estado General:** Fases 1–8 cerradas y verificadas en dispositivo; sin cambios OpenSpec abiertos.
 - **Artefacto de Distribución:** APK de depuración en `app/build/outputs/apk/debug/app-debug.apk`.
-- **Siguiente acción inmediata:** Probar en dispositivo las tareas pendientes de los cinco cambios abiertos (reapertura con perfil custom, `adb shell am kill`, otra VPN activa, VPN siempre activa, cambio de hora del sistema, websocket inactivo 30 min, ráfaga DNS) y archivarlos.
+- **Siguiente acción inmediata:** Fusionar el PR #3 en `develop`. Pendientes de decidir para próximos cambios: módulo `:core` independiente, ICMP real, semántica del jitter, optimización del camino de cada paquete, version catalog, Kover y configuración de release.

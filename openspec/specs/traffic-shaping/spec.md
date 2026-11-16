@@ -68,3 +68,26 @@ caudal útil los bytes retransmitidos por el túnel.
 #### Scenario: Descarga con retransmisiones
 - **WHEN** durante una descarga el túnel retransmite segmentos
 - **THEN** el caudal de bajada mostrado excluye esos bytes y el contador de retransmisiones los refleja aparte
+
+### Requirement: Temporización monotónica
+La latencia, el jitter, el ancho de banda y los timeouts del túnel SHALL medirse con un único reloj
+monotónico, de modo que un cambio de la hora del sistema no altere la degradación aplicada.
+
+#### Scenario: Hora del sistema retrasada con paquetes en cola
+- **GIVEN** la bajada tiene 300 ms de latencia y paquetes en cola
+- **WHEN** la hora del sistema se retrasa una hora
+- **THEN** los paquetes encolados salen tras su latencia programada y los nuevos siguen saliendo con unos 300 ms de retardo
+
+#### Scenario: Reloj único para cola y token bucket
+- **GIVEN** un pipeline construido con un reloj monotónico simulado
+- **WHEN** el reloj simulado avanza 300 ms sin tráfico
+- **THEN** el token bucket acumula exactamente los tokens de esos 300 ms (recortados a la ráfaga) y nada sale mientras el reloj simulado está parado
+
+### Requirement: Pérdida de ida y vuelta visible
+Como la pérdida se aplica de forma independiente en cada dirección, la interfaz SHALL indicarlo junto
+al control de pérdida y SHALL mostrar la pérdida efectiva de un intercambio de ida y vuelta,
+`1 − (1 − p)²`.
+
+#### Scenario: Perfil Wi-Fi inestable
+- **WHEN** el usuario selecciona un 8 % de pérdida
+- **THEN** la interfaz indica que se aplica en cada dirección y que un ping se pierde aproximadamente el 15,4 % de las veces

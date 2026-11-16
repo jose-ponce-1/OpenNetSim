@@ -10,4 +10,4 @@
 
 ## 3. Servicio como orquestador
 - [x] 3.1 Extraer `TunnelIntents`/`TunnelCommand`, `TunnelNotifications`, `TunnelStatusStore` y `ParcelFileDescriptorTunDevice`; verificar con `compileDebugKotlin`
-- [ ] 3.2 Verificar en dispositivo o emulador con cada preset: navegación, descarga, subida, `ping` y cambio de red Wi-Fi ↔ datos (reconstrucción por IPv6)
+- [x] 3.2 Verificar en dispositivo o emulador con cada preset: navegación, descarga, subida, `ping` y cambio de red Wi-Fi ↔ datos (reconstrucción por IPv6) — verificado por el usuario en dispositivo con `app-debug.apk` (17/11/2026: "todo funciona")

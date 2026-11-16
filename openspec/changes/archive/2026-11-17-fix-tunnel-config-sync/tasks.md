@@ -14,7 +14,7 @@
 ## 3. Ciclo de vida
 - [x] 3.1 En `onStartCommand`, tratar intent nulo y `android.net.VpnService` como `TunnelCommand.Restore`; sin configuración (salvo siempre activa) o con `VpnService.prepare(this) != null`, publicar `Stopped` y `stopSelf()`; verificar con `compileDebugKotlin`
 - [x] 3.2 Sobrescribir `onRevoke()` con `Failed(REVOKED_REASON)` y tratar un fallo de lectura sin permiso como revocación; verificar con `compileDebugKotlin`
-- [ ] 3.3 Verificar en dispositivo o emulador: (a) perfil custom, atrás, reabrir → sin cambios; (b) `adb shell am kill com.opennetsim` con el túnel activo → se restablece con la misma configuración; (c) activar otra VPN → `Failed` con motivo de revocación; (d) VPN siempre activa en los ajustes → `Running`
+- [x] 3.3 Verificar en dispositivo o emulador: (a) perfil custom, atrás, reabrir → sin cambios; (b) `adb shell am kill com.opennetsim` con el túnel activo → se restablece con la misma configuración; (c) activar otra VPN → `Failed` con motivo de revocación; (d) VPN siempre activa en los ajustes → `Running` — verificado por el usuario en dispositivo con `app-debug.apk` (17/11/2026: "todo funciona")
 
 ## 4. Pérdida de ida y vuelta
 - [x] 4.1 Añadir `ThrottleConfig.roundTripLossPercent` y mostrarlo bajo el slider de pérdida; verificar con `roundTripLossCompoundsPerDirectionLoss`

@@ -13,4 +13,4 @@
 
 ## 4. Verificación
 - [x] 4.1 Ejecutar `testDebugUnitTest`, `detekt` y `lintDebug`; verificar que terminan bien
-- [ ] 4.2 En dispositivo o emulador con el túnel activo y tráfico (descarga + `ping`): retrasar y adelantar la hora del sistema 1 h desde los ajustes; verificar que no hay congelación ni RST masivos
+- [x] 4.2 En dispositivo o emulador con el túnel activo y tráfico (descarga + `ping`): retrasar y adelantar la hora del sistema 1 h desde los ajustes; verificar que no hay congelación ni RST masivos — verificado por el usuario en dispositivo con `app-debug.apk` (17/11/2026: "todo funciona")
