@@ -1,4 +1,4 @@
-﻿package com.opennetsim.service.forwarder
+package com.opennetsim.service.forwarder
 
 import java.net.DatagramSocket
 import java.net.Socket
@@ -12,4 +12,3 @@ interface VpnSocketProtector {
     fun protect(socket: Socket): Boolean
     fun protect(socket: DatagramSocket): Boolean
 }
-

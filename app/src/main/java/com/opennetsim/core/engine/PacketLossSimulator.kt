@@ -1,4 +1,4 @@
-﻿package com.opennetsim.core.engine
+package com.opennetsim.core.engine
 
 /**
  * Simulador de descarte estocástico de paquetes de red.
@@ -44,4 +44,3 @@ class PacketLossSimulator(
         return value.coerceIn(0.0, 1.0)
     }
 }
-

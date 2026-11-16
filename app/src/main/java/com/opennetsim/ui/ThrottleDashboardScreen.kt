@@ -62,6 +62,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.opennetsim.model.NetworkTelemetry
+import com.opennetsim.model.ThrottleConfig
 import com.opennetsim.model.ThrottlePreset
 import com.opennetsim.ui.theme.AmberWarning
 import com.opennetsim.ui.theme.CyanPrimary
@@ -69,7 +70,6 @@ import com.opennetsim.ui.theme.EmeraldActive
 import com.opennetsim.ui.theme.RoseDanger
 import com.opennetsim.ui.theme.Slate400
 import com.opennetsim.ui.theme.Slate600
-import com.opennetsim.ui.theme.Slate700
 import com.opennetsim.ui.theme.Slate800
 import com.opennetsim.ui.theme.Slate900
 import com.opennetsim.ui.theme.Slate950
@@ -433,6 +433,19 @@ private fun PacketLossSection(
             accentColor = if (isHighLoss) RoseDanger else CyanPrimary
         )
 
+        // La pérdida se aplica en cada dirección: un ping o una petición/respuesta la sufren dos veces.
+        val roundTripLoss = ThrottleConfig.roundTripLossPercent(lossPercent)
+        Text(
+            text = String.format(
+                Locale.US,
+                "Se aplica en cada dirección. Pérdida de ida y vuelta (p. ej. ping): %.1f%%",
+                roundTripLoss
+            ),
+            style = MaterialTheme.typography.bodySmall,
+            color = Slate400,
+            modifier = Modifier.padding(top = 4.dp)
+        )
+
         AnimatedVisibility(
             visible = isHighLoss,
             enter = fadeIn(),
@@ -676,5 +689,3 @@ private fun TelemetryItem(
         )
     }
 }
-
-

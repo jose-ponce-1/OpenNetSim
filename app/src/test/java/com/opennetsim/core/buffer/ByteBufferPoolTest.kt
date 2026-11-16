@@ -1,4 +1,4 @@
-﻿package com.opennetsim.core.buffer
+package com.opennetsim.core.buffer
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -64,4 +64,3 @@ class ByteBufferPoolTest {
         assertEquals(1, pool.availableCount)
     }
 }
-

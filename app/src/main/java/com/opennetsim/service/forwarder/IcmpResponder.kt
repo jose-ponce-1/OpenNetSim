@@ -1,13 +1,15 @@
-﻿package com.opennetsim.service.forwarder
+package com.opennetsim.service.forwarder
 
 import com.opennetsim.core.packet.IcmpPacket
 import com.opennetsim.core.packet.IpPacket
 import com.opennetsim.core.packet.Ipv6Packet
 
 /**
- * Responde a solicitudes ICMP Echo Request (IPv4 e IPv6) procedentes del TUN.
- * Permite que comandos de diagnóstico como 'ping' funcionen de forma realista
- * y reporten la latencia y pérdida de paquetes configuradas en el motor.
+ * Responde EN LOCAL a solicitudes ICMP Echo Request (IPv4 e IPv6) procedentes del TUN.
+ *
+ * `ping` refleja la latencia y la pérdida configuradas en el motor, pero no mide la red real: el RTT
+ * no incluye el trayecto hasta el host y un host inexistente también responde. El reenvío ICMP real
+ * (sockets `IPPROTO_ICMP` no privilegiados) es una decisión de producto pendiente.
  */
 class IcmpResponder(
     private val onInboundPacket: (ByteArray) -> Unit
@@ -61,4 +63,3 @@ class IcmpResponder(
         }
     }
 }
-

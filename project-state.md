@@ -77,13 +77,23 @@ Aplicación Android moderna (Kotlin + Jetpack Compose) que simula condiciones de
 - [x] UDP: alta de sesiones sin bloqueo (modelo actor), datagramas de hasta 64 KB entregados enteros e ICMP de destino inalcanzable.
 - [x] Ciclo de vida: `TunnelState` real hacia la UI, IPv6 solo si la red física lo tiene (`NetworkCallback`), `setMetered(false)`, debounce de sliders, telemetría por dirección sin retransmisiones y diagnóstico en Logcat (`OpenNetSim`).
 - [x] 126 tests JVM en verde (1 omitido en Windows: ICMP por loopback) y `assembleDebug` correcto.
-- [ ] Verificación en emulador/dispositivo (tareas 9.2, 11.2 y 12.3 del cambio).
-- [ ] `ktlintCheck` y `detekt` siguen fallando por deuda previa (466 infracciones anteriores al cambio; este cambio no añade ninguna).
+- [x] Verificación en dispositivo (tareas 9.2, 11.2 y 12.3): `app-debug.apk` validado por el usuario el 16/11/2026, sin problemas detectados.
+- [x] Lint en verde (ver Fase 8). Cambio archivado en `openspec/changes/archive/2026-11-16-fix-tunnel-connectivity-throughput`.
+
+### Fase 8: Correcciones de la auditoría (rama `fix/audit-corrections`)
+- [x] Higiene de OpenSpec: conflicto `uplink-throttling` ↔ `traffic-shaping` resuelto (delta REMOVED), 5 cambios archivados y specs principales en `openspec/specs/`; contexto y reglas en `openspec/config.yaml`.
+- [x] `use-monotonic-clock`: `MonotonicClock` único para motor, token bucket, forwarders, telemetría y diagnóstico.
+- [x] `fix-tunnel-config-sync`: el servicio es la fuente de verdad de la configuración; persistencia (`ConfigStore`), restauración tras reinicio y VPN siempre activa, `onRevoke()` con motivo explícito; la UI muestra la pérdida de ida y vuelta.
+- [x] `align-session-timeouts-and-limits`: UDP 300 s (DNS 10 s), TCP establecida 2 h 4 min, límite de 1024 sesiones TCP/UDP.
+- [x] `decouple-tunnel-service`: `TunnelController` entre UI y servicio; `TunnelPipeline` sin Android y probado en JVM; servicio de 748 a 361 líneas.
+- [x] `add-quality-gate`: un solo formateador (detekt-formatting), baseline de detekt, sin BOM, `.editorconfig`, `kotlinx-coroutines-test` y GitHub Actions.
+- [x] 152 tests JVM en verde (1 omitido en Windows), `detekt` y `lintDebug` sin errores.
+- [ ] Verificación en dispositivo de los cinco cambios (última tarea de cada `tasks.md`) y primera ejecución de la CI en GitHub; después, archivarlos con `/opsx:archive`.
 
 ---
 
 ## Punto de Retorno (Checkpoint)
-- **Últimos archivos modificados:** `core/engine`, `core/packet`, `core/tcp` (nuevo), `service/` (`ThrottleVpnService`, forwarders, `diag/`, `network/`), `ui/` y `model/` (Fase 7, sin commitear).
-- **Estado General:** Fase 7 implementada y probada en JVM; pendiente la validación en emulador/dispositivo.
+- **Últimos archivos modificados:** `core/time/` (nuevo), `core/engine/`, `tunnel/` (nuevo), `service/` (servicio, `pipeline/` nuevo, forwarders), `ui/`, `config/detekt/`, `.github/workflows/ci.yml` (Fase 8, sin commitear en `fix/audit-corrections`).
+- **Estado General:** Fases 1–7 cerradas; Fase 8 implementada y probada en JVM, pendiente de verificación en dispositivo.
 - **Artefacto de Distribución:** APK de depuración en `app/build/outputs/apk/debug/app-debug.apk`.
-- **Siguiente acción inmediata:** Pruebas en vivo (emulador solo IPv4 y dispositivo físico) con cada preset: navegación, descarga larga (objetivo ≥ 80 % del caudal configurado en "Alta Latencia"), subida, `ping` y conexión persistente inactiva más de 60 s.
+- **Siguiente acción inmediata:** Probar en dispositivo las tareas pendientes de los cinco cambios abiertos (reapertura con perfil custom, `adb shell am kill`, otra VPN activa, VPN siempre activa, cambio de hora del sistema, websocket inactivo 30 min, ráfaga DNS) y archivarlos.

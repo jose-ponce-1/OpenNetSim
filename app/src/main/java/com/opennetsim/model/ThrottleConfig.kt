@@ -1,4 +1,4 @@
-﻿package com.opennetsim.model
+package com.opennetsim.model
 
 import java.util.Locale
 
@@ -25,8 +25,8 @@ data class ThrottleConfig(
     fun formattedUpBandwidth(): String = formatBandwidth(upKbps)
 
     private fun formatBandwidth(kbps: Int): String {
-        return if (kbps >= 1000) {
-            val mbps = kbps / 1000.0
+        return if (kbps >= KBPS_PER_MBPS) {
+            val mbps = kbps / KBPS_PER_MBPS.toDouble()
             String.format(Locale.US, "%.1f Mbps", mbps)
         } else {
             "$kbps kbps"
@@ -39,10 +39,24 @@ data class ThrottleConfig(
     fun matchesPreset(target: ThrottlePreset): Boolean {
         if (target == ThrottlePreset.CUSTOM) return false
         return downKbps == target.downKbps &&
-                upKbps == target.upKbps &&
-                latencyMs == target.latencyMs &&
-                jitterMs == target.jitterMs &&
-                kotlin.math.abs(packetLossPercent - target.packetLossPercent) < 0.01f
+            upKbps == target.upKbps &&
+            latencyMs == target.latencyMs &&
+            jitterMs == target.jitterMs &&
+            kotlin.math.abs(packetLossPercent - target.packetLossPercent) < LOSS_TOLERANCE
+    }
+
+    companion object {
+        private const val LOSS_TOLERANCE = 0.01f
+        private const val KBPS_PER_MBPS = 1000
+        private const val PERCENT = 100f
+
+        /**
+         * Pérdida efectiva de un intercambio de ida y vuelta (p. ej. un ping) cuando cada dirección
+         * descarta [perDirectionPercent] de forma independiente: `1 − (1 − p)²`, en porcentaje.
+         */
+        fun roundTripLossPercent(perDirectionPercent: Float): Float {
+            val p = (perDirectionPercent / PERCENT).coerceIn(0f, 1f)
+            return (1f - (1f - p) * (1f - p)) * PERCENT
+        }
     }
 }
-

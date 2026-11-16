@@ -1,5 +1,6 @@
 package com.opennetsim.core.engine
 
+import com.opennetsim.core.time.MonotonicClock
 import com.opennetsim.model.ThrottleConfig
 import kotlin.math.max
 
@@ -62,6 +63,8 @@ data class EngineMetrics(
  * detrás de ellos, de modo que nunca adelanta a datos anteriores de su propio flujo.
  *
  * @param latencyQueue Carril masivo; también define la latencia base y el jitter.
+ * @param clock Reloj monotónico; debe ser el mismo que usan [bandwidthLimiter] y [latencyQueue]
+ * (lo garantiza [createPipeline]).
  * @param queueWindowMs Retardo de cola máximo (además de la latencia) que admite el carril masivo.
  */
 @Suppress("TooManyFunctions")
@@ -69,10 +72,10 @@ class ThrottlingEngine(
     val bandwidthLimiter: TokenBucketLimiter,
     val latencyQueue: LatencyQueue,
     val packetLossSimulator: PacketLossSimulator,
-    private val timeSourceMs: () -> Long = System::currentTimeMillis,
+    private val clock: MonotonicClock = MonotonicClock.SYSTEM,
     private val queueWindowMs: Long = DEFAULT_QUEUE_WINDOW_MS
 ) {
-    private val interactiveQueue = LatencyQueue(timeSourceMs = timeSourceMs)
+    private val interactiveQueue = LatencyQueue(clock = clock)
 
     private var totalReceivedPackets: Long = 0L
     private var totalReleasedPackets: Long = 0L
@@ -125,7 +128,7 @@ class ThrottlingEngine(
     @Synchronized
     fun processIncoming(
         packet: ByteArray,
-        currentTimeMs: Long = timeSourceMs(),
+        currentTimeMs: Long = clock.nowMs(),
         trafficClass: TrafficClass = TrafficClass.BULK,
         flowId: Long = DelayedPacket.NO_FLOW,
         allowImmediateRelease: Boolean = true
@@ -218,7 +221,7 @@ class ThrottlingEngine(
      * El carril interactivo tiene prioridad; si su cabeza está lista pero sin tokens, nada sale.
      */
     @Synchronized
-    fun drainReady(currentTimeMs: Long = timeSourceMs()): List<ByteArray> {
+    fun drainReady(currentTimeMs: Long = clock.nowMs()): List<ByteArray> {
         val readyList = mutableListOf<ByteArray>()
         var lane = readyLane(currentTimeMs)
         while (lane != null && bandwidthLimiter.tryConsume(lane.peekHeadSize() ?: 0)) {
@@ -255,7 +258,7 @@ class ThrottlingEngine(
      * o recarga de tokens para la cabeza de algún carril), o null si ambos carriles están vacíos.
      */
     @Synchronized
-    fun timeUntilNextEventMs(currentTimeMs: Long = timeSourceMs()): Long? =
+    fun timeUntilNextEventMs(currentTimeMs: Long = clock.nowMs()): Long? =
         listOfNotNull(
             laneEventMs(interactiveQueue, currentTimeMs),
             laneEventMs(latencyQueue, currentTimeMs)
@@ -364,25 +367,26 @@ class ThrottlingEngine(
         fun kbpsToBytesPerSecond(rateKbps: Int): Long =
             max(MIN_RATE_BYTES_PER_SECOND, rateKbps * BITS_PER_KILOBIT / BITS_PER_BYTE)
 
-        @Suppress("LongParameterList") // Los relojes son parámetros por defecto, inyectables en tests.
+        /**
+         * Crea un pipeline cuyo token bucket, cola de latencia y carril interactivo comparten [clock].
+         */
         fun createPipeline(
             rateKbps: Int,
             latencyMs: Int,
             jitterMs: Int,
             packetLossPercent: Float,
-            timeSourceMs: () -> Long = System::currentTimeMillis,
-            timeSourceNanos: () -> Long = System::nanoTime
+            clock: MonotonicClock = MonotonicClock.SYSTEM
         ): ThrottlingEngine {
             val bytesPerSec = kbpsToBytesPerSecond(rateKbps)
             val limiter = TokenBucketLimiter(
                 bytesPerSecond = bytesPerSec,
                 burstCapacityBytes = TokenBucketLimiter.defaultBurstCapacity(bytesPerSec),
-                timeSourceNanos = timeSourceNanos
+                clock = clock
             )
             val queue = LatencyQueue(
                 baseLatencyMs = max(0L, latencyMs.toLong()),
                 jitterMs = max(0L, jitterMs.toLong()),
-                timeSourceMs = timeSourceMs
+                clock = clock
             )
             val lossSim = PacketLossSimulator(
                 initialLossProbability = (packetLossPercent / 100.0).toDouble()
@@ -392,20 +396,20 @@ class ThrottlingEngine(
                 bandwidthLimiter = limiter,
                 latencyQueue = queue,
                 packetLossSimulator = lossSim,
-                timeSourceMs = timeSourceMs
+                clock = clock
             )
         }
 
         fun fromConfig(
             config: ThrottleConfig,
-            timeSourceMs: () -> Long = System::currentTimeMillis
+            clock: MonotonicClock = MonotonicClock.SYSTEM
         ): ThrottlingEngine {
             return createPipeline(
                 rateKbps = config.downKbps,
                 latencyMs = config.latencyMs,
                 jitterMs = config.jitterMs,
                 packetLossPercent = config.packetLossPercent,
-                timeSourceMs = timeSourceMs
+                clock = clock
             )
         }
     }

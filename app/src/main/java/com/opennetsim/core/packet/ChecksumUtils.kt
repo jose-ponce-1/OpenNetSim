@@ -1,4 +1,4 @@
-﻿package com.opennetsim.core.packet
+package com.opennetsim.core.packet
 
 import java.nio.ByteBuffer
 
@@ -161,4 +161,3 @@ object ChecksumUtils {
         return (sum.inv() and 0xFFFF).toInt()
     }
 }
-

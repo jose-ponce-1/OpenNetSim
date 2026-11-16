@@ -1,4 +1,4 @@
-﻿package com.opennetsim.model
+package com.opennetsim.model
 
 import java.util.Locale
 import kotlin.math.max
@@ -37,11 +37,11 @@ data class NetworkTelemetry(
      */
     fun formattedTotalData(): String {
         return when {
-            totalTransferredBytes >= 1_000_000L -> {
-                String.format(Locale.US, "%.1f MB", totalTransferredBytes / 1_000_000.0)
+            totalTransferredBytes >= BYTES_PER_MB -> {
+                String.format(Locale.US, "%.1f MB", totalTransferredBytes / BYTES_PER_MB.toDouble())
             }
-            totalTransferredBytes >= 1_000L -> {
-                String.format(Locale.US, "%.1f KB", totalTransferredBytes / 1_000.0)
+            totalTransferredBytes >= BYTES_PER_KB -> {
+                String.format(Locale.US, "%.1f KB", totalTransferredBytes / BYTES_PER_KB.toDouble())
             }
             else -> "$totalTransferredBytes B"
         }
@@ -49,10 +49,15 @@ data class NetworkTelemetry(
 
     private fun formatRate(rate: Long): String {
         return when {
-            rate >= 1_000_000L -> String.format(Locale.US, "%.1f MB/s", rate / 1_000_000.0)
-            rate >= 1_000L -> String.format(Locale.US, "%.1f KB/s", rate / 1_000.0)
+            rate >= BYTES_PER_MB -> String.format(Locale.US, "%.1f MB/s", rate / BYTES_PER_MB.toDouble())
+            rate >= BYTES_PER_KB -> String.format(Locale.US, "%.1f KB/s", rate / BYTES_PER_KB.toDouble())
             else -> "$rate B/s"
         }
+    }
+
+    private companion object {
+        const val BYTES_PER_KB = 1_000L
+        const val BYTES_PER_MB = 1_000_000L
     }
 }
 

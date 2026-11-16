@@ -1,4 +1,4 @@
-﻿package com.opennetsim.model
+package com.opennetsim.model
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -86,4 +86,3 @@ class NetworkTelemetryTest {
         assertEquals(5L, connected.totalDroppedPackets)
     }
 }
-

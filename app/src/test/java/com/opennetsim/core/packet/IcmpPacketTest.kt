@@ -1,4 +1,4 @@
-﻿package com.opennetsim.core.packet
+package com.opennetsim.core.packet
 
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -78,4 +78,3 @@ class IcmpPacketTest {
         assertArrayEquals(payload, parsedReply.payload)
     }
 }
-

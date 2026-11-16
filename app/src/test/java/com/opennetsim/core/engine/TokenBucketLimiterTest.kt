@@ -1,5 +1,6 @@
-﻿package com.opennetsim.core.engine
+package com.opennetsim.core.engine
 
+import com.opennetsim.core.time.MonotonicClock
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -17,7 +18,7 @@ class TokenBucketLimiterTest {
         return TokenBucketLimiter(
             bytesPerSecond = bytesPerSec,
             burstCapacityBytes = burstCapacity,
-            timeSourceNanos = { simulatedTimeNanos },
+            clock = MonotonicClock { simulatedTimeNanos },
             minBurstCapacityBytes = minBurstCapacity
         )
     }
@@ -34,7 +35,7 @@ class TokenBucketLimiterTest {
         val lowRateLimiter = TokenBucketLimiter(
             bytesPerSecond = 2500L,
             burstCapacityBytes = 500L,
-            timeSourceNanos = { simulatedTimeNanos }
+            clock = MonotonicClock { simulatedTimeNanos }
         )
         // La capacidad de ráfaga debe elevarse al suelo seguro de MTU (1500 bytes)
         assertEquals(TokenBucketLimiter.MIN_BURST_CAPACITY_BYTES, lowRateLimiter.burstCapacityBytes)
@@ -116,7 +117,7 @@ class TokenBucketLimiterTest {
         // 128 kbps = 16_000 B/s; ráfaga por defecto = max(1500, 16_000 / 20) = 1500 B
         val limiter = TokenBucketLimiter(
             bytesPerSecond = 16_000L,
-            timeSourceNanos = { simulatedTimeNanos }
+            clock = MonotonicClock { simulatedTimeNanos }
         )
         assertEquals(1500L, limiter.burstCapacityBytes)
         assertTrue(limiter.tryConsume(1500)) // vaciar el bucket
@@ -141,7 +142,7 @@ class TokenBucketLimiterTest {
         val bytesPerSec = 16_000L
         val limiter = TokenBucketLimiter(
             bytesPerSecond = bytesPerSec,
-            timeSourceNanos = { simulatedTimeNanos }
+            clock = MonotonicClock { simulatedTimeNanos }
         )
         assertTrue(limiter.tryConsume(1500)) // partir del bucket vacío
         val startNanos = simulatedTimeNanos
@@ -176,4 +177,3 @@ class TokenBucketLimiterTest {
         assertEquals(2000.0, limiter.currentTokens, 0.001)
     }
 }
-

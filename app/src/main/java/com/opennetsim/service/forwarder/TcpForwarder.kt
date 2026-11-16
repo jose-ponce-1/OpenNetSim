@@ -38,6 +38,7 @@ import kotlin.random.Random
  * @param onInboundPacket recibe segmentos de datos y FIN (deben respetar el orden del flujo).
  * @param canReadDownlink false cuando el pipeline de bajada no admite más datos.
  * @param onControlPacket recibe ACKs, SYN-ACK, RST y sondas.
+ * @param maxSessions conexiones simultáneas; un SYN por encima del límite recibe RST sin abrir socket.
  */
 @Suppress("TooManyFunctions")
 class TcpForwarder(
@@ -45,8 +46,13 @@ class TcpForwarder(
     private val onInboundPacket: (ByteArray) -> Unit,
     private val canReadDownlink: () -> Boolean = { true },
     private val onControlPacket: (ByteArray) -> Unit = onInboundPacket,
-    initialTcpConfig: TcpConnectionConfig = TcpConnectionConfig()
+    initialTcpConfig: TcpConnectionConfig = TcpConnectionConfig(),
+    private val maxSessions: Int = DEFAULT_MAX_SESSIONS
 ) {
+    init {
+        require(maxSessions > 0) { "maxSessions debe ser positivo: $maxSessions" }
+    }
+
     private data class SessionKey(
         val clientIp: String,
         val clientPort: Int,
@@ -120,6 +126,8 @@ class TcpForwarder(
 
     private val diagnostics = environment.diagnostics
     private val bufferPool = environment.bufferPool
+    private val clock = environment.clock
+    private val rejectedSynCounter = AtomicLong(0L)
 
     // Solo el hilo del selector escribe; ConcurrentHashMap permite que close() itere con seguridad.
     private val sessions = ConcurrentHashMap<SessionKey, Session>()
@@ -148,6 +156,12 @@ class TcpForwarder(
     /** Bytes (paquetes IP completos) retransmitidos hacia el cliente desde el arranque. */
     fun retransmittedBytes(): Long = retransmittedBytesCounter.get()
 
+    /** Conexiones TCP abiertas. */
+    fun activeSessionCount(): Int = sessions.size
+
+    /** SYN rechazados con RST por alcanzar el límite de conexiones desde el arranque. */
+    fun rejectedSynCount(): Long = rejectedSynCounter.get()
+
     /**
      * Ajusta el tope de bytes en vuelo y el RTO inicial a la degradación configurada.
      */
@@ -169,7 +183,14 @@ class TcpForwarder(
      * Procesa un segmento TCP saliente proveniente de un paquete IPv4 en la interfaz TUN.
      */
     fun processOutbound(ipPacket: IpPacket) {
-        enqueueOutbound(ipPacket.sourceIp, ipPacket.destinationIp, ipPacket.sourceIpString, ipPacket.destinationIpString, ipPacket.payload, false)
+        enqueueOutbound(
+            ipPacket.sourceIp,
+            ipPacket.destinationIp,
+            ipPacket.sourceIpString,
+            ipPacket.destinationIpString,
+            ipPacket.payload,
+            false
+        )
     }
 
     /**
@@ -206,7 +227,7 @@ class TcpForwarder(
 
     private fun handleClientSegment(key: SessionKey, clientIp: ByteArray, serverIp: ByteArray, tcp: TcpPacket) {
         taskQueue.checkOwnerThread()
-        val now = System.currentTimeMillis()
+        val now = clock.nowMs()
         val session = sessions[key]
         if (session == null) {
             if (tcp.isSyn && !tcp.isAck) {
@@ -228,6 +249,24 @@ class TcpForwarder(
     }
 
     private fun openSession(key: SessionKey, clientIp: ByteArray, serverIp: ByteArray, syn: TcpPacket, now: Long) {
+        if (sessions.size >= maxSessions) {
+            rejectSynAboveLimit(key, clientIp, serverIp, syn)
+        } else {
+            connectSession(key, clientIp, serverIp, syn, now)
+        }
+    }
+
+    /** Límite de conexiones alcanzado: RST para el SYN, sin abrir socket ni tocar las existentes. */
+    private fun rejectSynAboveLimit(key: SessionKey, clientIp: ByteArray, serverIp: ByteArray, syn: TcpPacket) {
+        val total = rejectedSynCounter.incrementAndGet()
+        diagnostics.warn(
+            "tcp.limit",
+            "Límite de $maxSessions conexiones TCP: se rechaza ${describe(key)} con RST (rechazos: $total)"
+        )
+        TcpPacket.buildRstForSegment(syn)?.let { sendDetached(key, clientIp, serverIp, it) }
+    }
+
+    private fun connectSession(key: SessionKey, clientIp: ByteArray, serverIp: ByteArray, syn: TcpPacket, now: Long) {
         val channel = try {
             SocketChannel.open().apply { configureBlocking(false) }
         } catch (e: IOException) {
@@ -279,7 +318,11 @@ class TcpForwarder(
         if (session.removed) return
         val failure = session.ioFailure
         if (failure != null) {
-            diagnostics.warn("tcp.write", "Fallo al escribir hacia ${describe(session.key)}: ${failure.message}", failure)
+            diagnostics.warn(
+                "tcp.write",
+                "Fallo al escribir hacia ${describe(session.key)}: ${failure.message}",
+                failure
+            )
             session.connection.abort()
             return
         }
@@ -330,7 +373,7 @@ class TcpForwarder(
      * Si hay lecturas pausadas por la bajada se sondea cada 5 ms hasta que llegue [resumeReads].
      */
     private fun selectTimeoutMs(): Long {
-        val now = System.currentTimeMillis()
+        val now = clock.nowMs()
         var timeout = MAX_SELECT_TIMEOUT_MS
         for (session in sessions.values) {
             if (session.readsPaused && !canReadDownlink()) timeout = MIN_SELECT_TIMEOUT_MS
@@ -341,7 +384,7 @@ class TcpForwarder(
     }
 
     private fun runTimers() {
-        val now = System.currentTimeMillis()
+        val now = clock.nowMs()
         for (session in sessions.values) {
             val deadline = session.connection.nextDeadlineMs() ?: continue
             if (now >= deadline) session.connection.onTimer(now)
@@ -355,7 +398,7 @@ class TcpForwarder(
         try {
             if (session.channel.finishConnect()) {
                 session.selectionKey?.interestOps(SelectionKey.OP_READ)
-                session.connection.onUpstreamConnected(System.currentTimeMillis())
+                session.connection.onUpstreamConnected(clock.nowMs())
             }
         } catch (e: IOException) {
             diagnostics.warn("tcp.connect", "finishConnect falló hacia ${describe(session.key)}: ${e.message}", e)
@@ -373,7 +416,7 @@ class TcpForwarder(
         try {
             buffer.limit(minOf(window, buffer.capacity()))
             val bytesRead = session.channel.read(buffer)
-            val now = System.currentTimeMillis()
+            val now = clock.nowMs()
             if (bytesRead > 0) {
                 buffer.flip()
                 val data = ByteArray(buffer.remaining())
@@ -477,5 +520,6 @@ class TcpForwarder(
         private const val ISN_SPACE = 1L shl 32
         private const val MIN_SELECT_TIMEOUT_MS = 5L
         private const val MAX_SELECT_TIMEOUT_MS = 250L
+        const val DEFAULT_MAX_SESSIONS = 1024
     }
 }

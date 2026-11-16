@@ -58,7 +58,8 @@ class TcpForwarderIntegrationTest {
 
     private fun forwarder(
         config: TcpConnectionConfig = TcpConnectionConfig(),
-        protector: VpnSocketProtector = allowingProtector
+        protector: VpnSocketProtector = allowingProtector,
+        maxSessions: Int = TcpForwarder.DEFAULT_MAX_SESSIONS
     ): TcpForwarder = TcpForwarder(
         environment = ForwarderEnvironment(
             socketProtector = protector,
@@ -66,8 +67,60 @@ class TcpForwarderIntegrationTest {
             strictThreadChecks = true
         ),
         onInboundPacket = { inbound.add(it) },
-        initialTcpConfig = config
+        initialTcpConfig = config,
+        maxSessions = maxSessions
     ).also { forwarders += it }
+
+    @Test
+    fun synAboveSessionLimitIsResetWithoutOpeningSocketAndExistingConnectionKeepsWorking() {
+        val echoed = ByteArrayOutputStream()
+        serve { socket ->
+            val buffer = ByteArray(64)
+            val read = socket.getInputStream().read(buffer)
+            echoed.write(buffer, 0, read)
+            socket.getOutputStream().write(buffer, 0, read)
+            socket.getOutputStream().flush()
+            Thread.sleep(1_000L)
+        }
+        val protectedSockets = java.util.concurrent.atomic.AtomicInteger(0)
+        val countingProtector = object : VpnSocketProtector {
+            override fun protect(socket: Socket): Boolean {
+                protectedSockets.incrementAndGet()
+                return true
+            }
+
+            override fun protect(socket: DatagramSocket) = true
+        }
+        val tcp = forwarder(protector = countingProtector, maxSessions = 1)
+        val first = client(tcp, 50_100)
+        first.connect()
+
+        // Segundo SYN con el límite alcanzado: RST inmediato y ningún socket exterior nuevo.
+        tcp.processOutbound(
+            TcpPacket(
+                sourcePort = 50_101,
+                destinationPort = serverSocket.localPort,
+                sequenceNumber = 1L,
+                acknowledgmentNumber = 0L,
+                flags = TcpPacket.FLAG_SYN,
+                windowSize = 65535
+            ).toIpPacket(clientIp, serverIp)
+        )
+        val rst = inbound.poll(2, TimeUnit.SECONDS)?.let { TcpPacket.parse(IpPacket.parse(it)!!.payload) }
+        assertNotNull("El SYN por encima del límite recibe respuesta", rst)
+        assertTrue("La respuesta es un RST", rst!!.isRst)
+        assertEquals(50_101, rst.destinationPort)
+        assertEquals("No se abre ningún socket exterior para el SYN rechazado", 1, protectedSockets.get())
+        assertEquals(1L, tcp.rejectedSynCount())
+
+        // La conexión existente sigue transfiriendo datos.
+        first.sendSegment(TcpPacket.FLAG_ACK or TcpPacket.FLAG_PSH, "hola".toByteArray())
+        val deadline = System.nanoTime() + 3_000_000_000L
+        while (first.received.size() < 4 && System.nanoTime() < deadline) first.poll(20L)
+        assertEquals("hola", first.received.toString(Charsets.US_ASCII.name()))
+        assertEquals("hola", echoed.toString(Charsets.US_ASCII.name()))
+        assertEquals(1, tcp.activeSessionCount())
+    }
 
     private fun client(forwarder: TcpForwarder, clientPort: Int, windowField: Int = 65535, windowScale: Int? = 7) =
         TunTcpClient(
