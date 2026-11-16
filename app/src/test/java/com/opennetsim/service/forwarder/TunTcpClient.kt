@@ -40,7 +40,11 @@ class TunTcpClient(
     var rstReceived: TcpPacket? = null
         private set
 
-    fun connect(timeoutMs: Long = 3000L): TcpPacket {
+    /**
+     * Abre la conexión y devuelve el SYN-ACK. Con [allowReset], un RST durante el handshake (p. ej. el
+     * servidor reinicia la conexión nada más aceptarla) también termina la espera y se devuelve ese RST.
+     */
+    fun connect(timeoutMs: Long = 3000L, allowReset: Boolean = false): TcpPacket {
         val options = TcpOptions(mss = 1460, windowScale = windowScale).encode()
         send(
             TcpPacket(
@@ -57,6 +61,7 @@ class TunTcpClient(
         val deadline = System.currentTimeMillis() + timeoutMs
         while (System.currentTimeMillis() < deadline) {
             val segment = poll(50L) ?: continue
+            if (allowReset && segment.isRst) return segment
             if (segment.isSyn && segment.isAck) {
                 rcvNxt = (segment.sequenceNumber + 1) and MASK_32
                 sndUna = segment.acknowledgmentNumber

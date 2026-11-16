@@ -260,7 +260,8 @@ class TcpForwarderIntegrationTest {
 
         val tcp = forwarder()
         val client = client(tcp, 50004)
-        client.connect()
+        // En Linux el RST del servidor puede llegar antes de que termine el handshake: también vale.
+        client.connect(allowReset = true)
         val deadline = System.currentTimeMillis() + 3_000L
         while (client.rstReceived == null && System.currentTimeMillis() < deadline) {
             client.sendSegment(TcpPacket.FLAG_ACK or TcpPacket.FLAG_PSH, pattern(512))
