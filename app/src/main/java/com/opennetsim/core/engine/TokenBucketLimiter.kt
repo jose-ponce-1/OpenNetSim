@@ -1,5 +1,6 @@
 package com.opennetsim.core.engine
 
+import com.opennetsim.core.time.MonotonicClock
 import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
@@ -10,12 +11,12 @@ import kotlin.math.min
  *
  * @param bytesPerSecond Tasa sostenida en bytes por segundo.
  * @param burstCapacityBytes Capacidad máxima acumulable de tokens (ráfaga).
- * @param timeSourceNanos Proveedor inyectable de tiempo en nanosegundos (por defecto System.nanoTime).
+ * @param clock Reloj monotónico compartido con la cola de latencia del mismo pipeline.
  */
 class TokenBucketLimiter(
     bytesPerSecond: Long,
     burstCapacityBytes: Long = defaultBurstCapacity(bytesPerSecond),
-    private val timeSourceNanos: () -> Long = System::nanoTime,
+    private val clock: MonotonicClock = MonotonicClock.SYSTEM,
     minBurstCapacityBytes: Long = MIN_BURST_CAPACITY_BYTES
 ) {
     val minBurstCapacityBytes: Long = max(0L, minBurstCapacityBytes)
@@ -27,11 +28,11 @@ class TokenBucketLimiter(
         private set
 
     private var availableTokens: Double = this.burstCapacityBytes.toDouble()
-    private var lastRefillTimestampNanos: Long = timeSourceNanos()
+    private var lastRefillTimestampNanos: Long = clock.nowNanos()
 
     val currentTokens: Double
         @Synchronized get() {
-            refill(timeSourceNanos())
+            refill(clock.nowNanos())
             return availableTokens
         }
 
@@ -50,7 +51,7 @@ class TokenBucketLimiter(
         require(bytes >= 0) { "El número de bytes a consumir no puede ser negativo: $bytes" }
         if (bytes == 0) return true
 
-        val now = timeSourceNanos()
+        val now = clock.nowNanos()
         refill(now)
 
         return if (availableTokens + TOKEN_EPSILON >= admissionThreshold(bytes)) {
@@ -66,7 +67,7 @@ class TokenBucketLimiter(
      * [tryConsume], incluyendo la deuda pendiente de paquetes anteriores mayores que la ráfaga.
      */
     @Synchronized
-    fun calculateWaitTimeNanos(bytes: Int, nowNanos: Long = timeSourceNanos()): Long {
+    fun calculateWaitTimeNanos(bytes: Int, nowNanos: Long = clock.nowNanos()): Long {
         require(bytes >= 0) { "El número de bytes no puede ser negativo: $bytes" }
         if (bytes == 0) return 0L
 
@@ -77,7 +78,7 @@ class TokenBucketLimiter(
             0L
         } else {
             val deficit = threshold - availableTokens
-            val nanosRequired = ceil((deficit / bytesPerSecond.toDouble()) * 1_000_000_000.0).toLong()
+            val nanosRequired = ceil((deficit / bytesPerSecond.toDouble()) * NANOS_PER_SECOND).toLong()
             max(1L, nanosRequired)
         }
     }
@@ -87,7 +88,7 @@ class TokenBucketLimiter(
      * [bytes] si antes deben salir [bytesAhead] bytes ya encolados.
      */
     @Synchronized
-    fun estimateWaitTimeMs(bytesAhead: Long, bytes: Int, nowNanos: Long = timeSourceNanos()): Long {
+    fun estimateWaitTimeMs(bytesAhead: Long, bytes: Int, nowNanos: Long = clock.nowNanos()): Long {
         refill(nowNanos)
         val deficit = bytesAhead.coerceAtLeast(0L) + admissionThreshold(bytes) - availableTokens
         if (deficit <= TOKEN_EPSILON) return 0L
@@ -100,9 +101,9 @@ class TokenBucketLimiter(
      * Calcula el tiempo de espera en milisegundos (redondeo hacia arriba).
      */
     @Synchronized
-    fun calculateWaitTimeMs(bytes: Int, nowNanos: Long = timeSourceNanos()): Long {
+    fun calculateWaitTimeMs(bytes: Int, nowNanos: Long = clock.nowNanos()): Long {
         val nanos = calculateWaitTimeNanos(bytes, nowNanos)
-        return if (nanos == 0L) 0L else (nanos + 999_999L) / 1_000_000L
+        return if (nanos == 0L) 0L else (nanos + MonotonicClock.NANOS_PER_MS - 1) / MonotonicClock.NANOS_PER_MS
     }
 
     /**
@@ -113,7 +114,7 @@ class TokenBucketLimiter(
         newBytesPerSecond: Long,
         newBurstCapacityBytes: Long = defaultBurstCapacity(newBytesPerSecond)
     ) {
-        val now = timeSourceNanos()
+        val now = clock.nowNanos()
         refill(now)
 
         this.bytesPerSecond = max(1L, newBytesPerSecond)
@@ -125,7 +126,7 @@ class TokenBucketLimiter(
      * Restablece el bucket a su capacidad máxima de ráfaga.
      */
     @Synchronized
-    fun reset(nowNanos: Long = timeSourceNanos()) {
+    fun reset(nowNanos: Long = clock.nowNanos()) {
         lastRefillTimestampNanos = nowNanos
         availableTokens = burstCapacityBytes.toDouble()
     }
@@ -133,7 +134,7 @@ class TokenBucketLimiter(
     private fun refill(nowNanos: Long) {
         val elapsedNanos = nowNanos - lastRefillTimestampNanos
         if (elapsedNanos > 0) {
-            val tokensToAdd = (elapsedNanos.toDouble() / 1_000_000_000.0) * bytesPerSecond
+            val tokensToAdd = (elapsedNanos.toDouble() / NANOS_PER_SECOND) * bytesPerSecond
             availableTokens = min(burstCapacityBytes.toDouble(), availableTokens + tokensToAdd)
             lastRefillTimestampNanos = nowNanos
         }
@@ -148,10 +149,10 @@ class TokenBucketLimiter(
         /** Tolerancia de redondeo en coma flotante al comparar tokens. */
         private const val TOKEN_EPSILON: Double = 1e-6
         private const val MS_PER_SECOND: Double = 1000.0
+        private const val NANOS_PER_SECOND: Double = 1_000_000_000.0
         private const val BURST_WINDOW_DIVISOR: Long = 20L // Ráfaga máxima de 50 ms
 
         fun defaultBurstCapacity(bytesPerSecond: Long): Long =
             max(MIN_BURST_CAPACITY_BYTES, bytesPerSecond / BURST_WINDOW_DIVISOR)
     }
 }
-

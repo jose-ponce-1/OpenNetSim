@@ -1,4 +1,4 @@
-﻿package com.opennetsim.service.forwarder
+package com.opennetsim.service.forwarder
 
 import com.opennetsim.core.buffer.ByteBufferPool
 import com.opennetsim.core.packet.IcmpUnreachable
@@ -21,6 +21,34 @@ import java.nio.channels.DatagramChannel
 import java.nio.channels.SelectionKey
 import java.nio.channels.Selector
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
+
+/**
+ * Política de vida de las sesiones UDP.
+ *
+ * Los valores por defecto cumplen RFC 4787 REQ-5 (inactividad ≥ 2 min; se usan 5 min) para no romper
+ * el mapeo de QUIC, WebRTC o VoIP; las consultas DNS caducan antes porque cada una abre un socket.
+ *
+ * @param maxSessions Sesiones simultáneas; al alcanzarlo se desaloja la menos recientemente activa.
+ */
+data class UdpSessionPolicy(
+    val idleTimeoutMs: Long = DEFAULT_IDLE_TIMEOUT_MS,
+    val dnsIdleTimeoutMs: Long = DEFAULT_DNS_IDLE_TIMEOUT_MS,
+    val maxSessions: Int = DEFAULT_MAX_SESSIONS
+) {
+    init {
+        require(maxSessions > 0) { "maxSessions debe ser positivo: $maxSessions" }
+    }
+
+    fun idleTimeoutFor(serverPort: Int): Long = if (serverPort == DNS_PORT) dnsIdleTimeoutMs else idleTimeoutMs
+
+    companion object {
+        const val DEFAULT_IDLE_TIMEOUT_MS = 300_000L
+        const val DEFAULT_DNS_IDLE_TIMEOUT_MS = 10_000L
+        const val DEFAULT_MAX_SESSIONS = 1024
+        const val DNS_PORT = 53
+    }
+}
 
 /**
  * Reenvía datagramas UDP (como consultas DNS y tráfico QUIC) desde la interfaz TUN
@@ -30,9 +58,11 @@ import java.util.concurrent.ConcurrentHashMap
  * hilo del selector. Los paquetes del TUN solo se encolan con [SelectorTaskQueue.post], de modo que
  * dar de alta una sesión nunca bloquea al hilo que despacha el uplink.
  */
+@Suppress("TooManyFunctions")
 class UdpForwarder(
     private val environment: ForwarderEnvironment,
-    private val onInboundPacket: (ByteArray) -> Unit
+    private val onInboundPacket: (ByteArray) -> Unit,
+    private val policy: UdpSessionPolicy = UdpSessionPolicy()
 ) {
     private data class SessionKey(
         val clientIp: String,
@@ -47,10 +77,13 @@ class UdpForwarder(
         val channel: DatagramChannel,
         val clientIpBytes: ByteArray,
         val serverIpBytes: ByteArray,
+        val idleTimeoutMs: Long,
         var lastActiveTimeMs: Long
     )
 
     private val diagnostics = environment.diagnostics
+    private val clock = environment.clock
+    private val evictionsCounter = AtomicLong(0L)
 
     /** Pool dedicado de búferes de 64 KB: un datagrama UDP nunca se trunca al leerlo. */
     private val receivePool = ByteBufferPool(bufferSize = RECEIVE_BUFFER_BYTES, maxPoolSize = RECEIVE_POOL_SIZE)
@@ -61,13 +94,24 @@ class UdpForwarder(
     private val taskQueue = SelectorTaskQueue(selector, environment.strictThreadChecks)
 
     private var workerJob: Job? = null
-    private var lastCleanupMs = System.currentTimeMillis()
+    private var lastCleanupMs = clock.nowMs()
 
     @Volatile
     private var isRunning = true
 
     init {
         startWorkerLoop()
+    }
+
+    /** Sesiones UDP abiertas. */
+    fun activeSessionCount(): Int = sessions.size
+
+    /** Sesiones desalojadas por alcanzar [UdpSessionPolicy.maxSessions] desde el arranque. */
+    fun evictedSessionCount(): Long = evictionsCounter.get()
+
+    /** Fuerza una pasada de caducidad por inactividad en el hilo del selector (tests). */
+    internal fun expireIdleSessionsNow() {
+        taskQueue.post { cleanupIdleSessions(force = true) }
     }
 
     /**
@@ -128,7 +172,7 @@ class UdpForwarder(
             openSession(key, clientIpBytes, serverIpBytes, payload) ?: return
         }
 
-        session.lastActiveTimeMs = System.currentTimeMillis()
+        session.lastActiveTimeMs = clock.nowMs()
         try {
             session.channel.write(ByteBuffer.wrap(payload))
         } catch (e: IOException) {
@@ -179,6 +223,7 @@ class UdpForwarder(
         firstPayload: ByteArray
     ): Session? {
         taskQueue.checkOwnerThread()
+        if (sessions.size >= policy.maxSessions) evictLeastRecentlyActive()
         val channel = try {
             DatagramChannel.open()
         } catch (e: IOException) {
@@ -200,7 +245,8 @@ class UdpForwarder(
                 channel = channel,
                 clientIpBytes = clientIpBytes.copyOf(),
                 serverIpBytes = serverIpBytes.copyOf(),
-                lastActiveTimeMs = System.currentTimeMillis()
+                idleTimeoutMs = policy.idleTimeoutFor(key.serverPort),
+                lastActiveTimeMs = clock.nowMs()
             )
             channel.register(selector, SelectionKey.OP_READ, session)
             sessions[key] = session
@@ -252,12 +298,15 @@ class UdpForwarder(
         try {
             val bytesRead = session.channel.read(buffer)
             if (bytesRead > 0) {
-                session.lastActiveTimeMs = System.currentTimeMillis()
+                session.lastActiveTimeMs = clock.nowMs()
                 buffer.flip()
                 val maxPayload = if (session.key.isIpv6) MAX_UDP_PAYLOAD_IPV6 else MAX_UDP_PAYLOAD_IPV4
                 if (buffer.remaining() > maxPayload) {
                     // No cabe en un único paquete IP (65.535 bytes): se descarta, no se trunca.
-                    diagnostics.warn("udp.oversize", "Datagrama de ${buffer.remaining()} B de ${describe(session.key)} descartado")
+                    diagnostics.warn(
+                        "udp.oversize",
+                        "Datagrama de ${buffer.remaining()} B de ${describe(session.key)} descartado"
+                    )
                     return
                 }
                 val payload = ByteArray(buffer.remaining())
@@ -288,19 +337,32 @@ class UdpForwarder(
         }
     }
 
-    private fun cleanupIdleSessions() {
-        val now = System.currentTimeMillis()
-        if (now - lastCleanupMs < CLEANUP_INTERVAL_MS) return
+    private fun cleanupIdleSessions(force: Boolean = false) {
+        val now = clock.nowMs()
+        if (!force && now - lastCleanupMs < CLEANUP_INTERVAL_MS) return
         lastCleanupMs = now
 
         val it = sessions.entries.iterator()
         while (it.hasNext()) {
-            val entry = it.next()
-            if (now - entry.value.lastActiveTimeMs > SESSION_TIMEOUT_MS) {
-                closeQuietly(entry.value.channel)
+            val session = it.next().value
+            if (now - session.lastActiveTimeMs >= session.idleTimeoutMs) {
+                closeQuietly(session.channel)
                 it.remove()
             }
         }
+    }
+
+    /** Cierra la sesión menos recientemente activa para admitir una nueva (límite de sesiones). */
+    private fun evictLeastRecentlyActive() {
+        val oldest = sessions.values.minByOrNull { it.lastActiveTimeMs } ?: return
+        closeSession(oldest.key)
+        val total = evictionsCounter.incrementAndGet()
+        diagnostics.log(
+            DiagLevel.INFO,
+            "udp.evict",
+            "Límite de ${policy.maxSessions} sesiones UDP: se desaloja ${describe(oldest.key)} " +
+                "(activas: ${sessions.size}, desalojos: $total)"
+        )
     }
 
     private fun closeSession(key: SessionKey) {
@@ -345,7 +407,6 @@ class UdpForwarder(
         /** Payload UDP máximo con el campo de longitud de payload IPv6 a 65.535 (65.535 − 8). */
         private const val MAX_UDP_PAYLOAD_IPV6 = 65_527
         private val EMPTY_PAYLOAD = ByteArray(0)
-        private const val SESSION_TIMEOUT_MS = 30_000L // 30 segundos de inactividad
-        private const val CLEANUP_INTERVAL_MS = 5_000L
+        private const val CLEANUP_INTERVAL_MS = 1_000L
     }
 }

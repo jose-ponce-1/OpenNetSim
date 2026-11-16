@@ -3,7 +3,6 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("io.gitlab.arturbosch.detekt")
-    id("org.jlleitschuh.gradle.ktlint")
 }
 
 android {
@@ -53,12 +52,9 @@ detekt {
     buildUponDefaultConfig = true
     allRules = false
     config.setFrom(files("$rootDir/config/detekt/detekt.yml"))
+    // Deuda previa conocida; toda infracción nueva rompe el build. Regenerar con ./gradlew detektBaseline.
+    baseline = file("$rootDir/config/detekt/baseline.xml")
     parallel = true
-}
-
-ktlint {
-    android.set(true)
-    ignoreFailures.set(false)
 }
 
 dependencies {
@@ -81,6 +77,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
     detektPlugins("io.gitlab.arturbosch.detekt:detekt-formatting:1.23.7")

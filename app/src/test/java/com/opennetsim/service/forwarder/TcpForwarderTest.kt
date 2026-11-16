@@ -1,4 +1,4 @@
-﻿package com.opennetsim.service.forwarder
+package com.opennetsim.service.forwarder
 
 import com.opennetsim.core.packet.IpPacket
 import com.opennetsim.core.packet.TcpPacket
@@ -9,7 +9,6 @@ import kotlinx.coroutines.cancel
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import java.io.InputStream
@@ -139,8 +138,11 @@ class TcpForwarderTest {
         var totalRead = 0
         while (totalRead < 12 && System.currentTimeMillis() < deadline) {
             val r = inputStream.read(receivedBuffer, totalRead, 12 - totalRead)
-            if (r > 0) totalRead += r
-            else break
+            if (r > 0) {
+                totalRead += r
+            } else {
+                break
+            }
         }
         assertEquals(12, totalRead)
         assertEquals("Hello World!", String(receivedBuffer))
@@ -165,4 +167,3 @@ class TcpForwarderTest {
         acceptedSocket.close()
     }
 }
-

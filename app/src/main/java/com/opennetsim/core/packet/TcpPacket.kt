@@ -1,4 +1,4 @@
-﻿package com.opennetsim.core.packet
+package com.opennetsim.core.packet
 
 import java.nio.ByteBuffer
 
@@ -169,15 +169,19 @@ data class TcpPacket(
             val sourcePort = ((data[offset].toInt() and 0xFF) shl 8) or (data[offset + 1].toInt() and 0xFF)
             val destinationPort = ((data[offset + 2].toInt() and 0xFF) shl 8) or (data[offset + 3].toInt() and 0xFF)
 
-            val seqNum = (((data[offset + 4].toLong() and 0xFF) shl 24) or
+            val seqNum = (
+                ((data[offset + 4].toLong() and 0xFF) shl 24) or
                     ((data[offset + 5].toLong() and 0xFF) shl 16) or
                     ((data[offset + 6].toLong() and 0xFF) shl 8) or
-                    (data[offset + 7].toLong() and 0xFF)) and 0xFFFFFFFFL
+                    (data[offset + 7].toLong() and 0xFF)
+                ) and 0xFFFFFFFFL
 
-            val ackNum = (((data[offset + 8].toLong() and 0xFF) shl 24) or
+            val ackNum = (
+                ((data[offset + 8].toLong() and 0xFF) shl 24) or
                     ((data[offset + 9].toLong() and 0xFF) shl 16) or
                     ((data[offset + 10].toLong() and 0xFF) shl 8) or
-                    (data[offset + 11].toLong() and 0xFF)) and 0xFFFFFFFFL
+                    (data[offset + 11].toLong() and 0xFF)
+                ) and 0xFFFFFFFFL
 
             val dataOffset = (data[offset + 12].toInt() and 0xF0) ushr 4
             val headerLength = dataOffset * 4
@@ -365,4 +369,3 @@ data class TcpPacket(
         }
     }
 }
-

@@ -265,6 +265,22 @@ class TcpConnectionTest {
     }
 
     @Test
+    fun establishedIdleTimeoutMeetsRfc5382() {
+        // RFC 5382 REQ-5: al menos 2 h 4 min.
+        assertTrue(TcpConnectionConfig.DEFAULT_ESTABLISHED_IDLE_TIMEOUT_MS >= 124L * 60_000L)
+    }
+
+    @Test
+    fun persistentConnectionIdleFor30MinutesIsNotReset() {
+        val connection = establishedConnection()
+        output.clear()
+        connection.onTimer(30L * 60_000L)
+
+        assertFalse("Sin RST tras 30 min inactiva", output.closed)
+        assertTrue(output.sent.none { it.segment.isRst })
+    }
+
+    @Test
     fun responseAfterIdleIsNotRetransmittedEarly() {
         // Handshake confirmado en el mismo instante: muestra de RTT 0 → RTO mínimo (200 ms).
         val connection = establishedConnection()

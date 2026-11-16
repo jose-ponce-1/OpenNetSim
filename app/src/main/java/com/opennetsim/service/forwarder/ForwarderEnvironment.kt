@@ -1,6 +1,7 @@
 package com.opennetsim.service.forwarder
 
 import com.opennetsim.core.buffer.ByteBufferPool
+import com.opennetsim.core.time.MonotonicClock
 import com.opennetsim.service.diag.NetDiagnostics
 import kotlinx.coroutines.CoroutineScope
 import java.nio.channels.Selector
@@ -10,6 +11,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 /**
  * Dependencias comunes de los forwarders.
  *
+ * @param clock Reloj monotónico de timeouts e inactividad; el mismo que usa el motor.
  * @param strictThreadChecks Si es true, cualquier operación sobre el selector o el estado de sesión
  * fuera del hilo del selector lanza [IllegalStateException] (solo para tests).
  */
@@ -18,6 +20,7 @@ data class ForwarderEnvironment(
     val coroutineScope: CoroutineScope,
     val bufferPool: ByteBufferPool = ByteBufferPool.defaultInstance,
     val diagnostics: NetDiagnostics = NetDiagnostics.NONE,
+    val clock: MonotonicClock = MonotonicClock.SYSTEM,
     val strictThreadChecks: Boolean = false
 )
 

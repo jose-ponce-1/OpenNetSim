@@ -1,4 +1,4 @@
-﻿package com.opennetsim.core.packet
+package com.opennetsim.core.packet
 
 import java.nio.ByteBuffer
 
@@ -180,4 +180,3 @@ data class IpPacket(
         }
     }
 }
-

@@ -1,4 +1,4 @@
-﻿package com.opennetsim.core.packet
+package com.opennetsim.core.packet
 
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -251,11 +251,16 @@ class PacketTest {
     fun testChecksumUtilsrfc1071() {
         // RFC 1071 simple check: checksum over verified data
         val data = byteArrayOf(
-            0x00, 0x01, 0xf2.toByte(), 0x03,
-            0xf4.toByte(), 0xf5.toByte(), 0xf6.toByte(), 0xf7.toByte()
+            0x00,
+            0x01,
+            0xf2.toByte(),
+            0x03,
+            0xf4.toByte(),
+            0xf5.toByte(),
+            0xf6.toByte(),
+            0xf7.toByte()
         )
         val checksum = ChecksumUtils.calculateChecksum(data, 0, data.size)
         assertTrue(checksum in 0..0xFFFF)
     }
 }
-

@@ -1,5 +1,6 @@
-﻿package com.opennetsim.core.engine
+package com.opennetsim.core.engine
 
+import com.opennetsim.core.time.MonotonicClock
 import com.opennetsim.model.ThrottleConfig
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -14,16 +15,15 @@ class BidirectionalThrottlingEngineTest {
     fun testUplinkAndDownlinkIndependentRates() {
         val config = ThrottleConfig(
             downKbps = 1000, // 125_000 B/s
-            upKbps = 200,    // 25_000 B/s
-            latencyMs = 100,  // 50ms up, 50ms down
+            upKbps = 200, // 25_000 B/s
+            latencyMs = 100, // 50ms up, 50ms down
             jitterMs = 0,
             packetLossPercent = 0.0f
         )
 
         val engine = BidirectionalThrottlingEngine.fromConfig(
             config = config,
-            timeSourceMs = { simulatedTimeMs },
-            timeSourceNanos = { simulatedTimeMs * 1_000_000L }
+            clock = MonotonicClock.ofMillis { simulatedTimeMs }
         )
 
         assertEquals(25_000L, engine.uplinkEngine.bandwidthLimiter.bytesPerSecond)
@@ -45,8 +45,7 @@ class BidirectionalThrottlingEngineTest {
 
         val engine = BidirectionalThrottlingEngine.fromConfig(
             config = config,
-            timeSourceMs = { simulatedTimeMs },
-            timeSourceNanos = { simulatedTimeMs * 1_000_000L }
+            clock = MonotonicClock.ofMillis { simulatedTimeMs }
         )
 
         val upPacket = byteArrayOf(1, 2, 3)
@@ -96,8 +95,7 @@ class BidirectionalThrottlingEngineTest {
 
         val engine = BidirectionalThrottlingEngine.fromConfig(
             config = config,
-            timeSourceMs = { simulatedTimeMs },
-            timeSourceNanos = { simulatedTimeMs * 1_000_000L }
+            clock = MonotonicClock.ofMillis { simulatedTimeMs }
         )
 
         val newConfig = config.copy(
@@ -136,8 +134,7 @@ class BidirectionalThrottlingEngineTest {
 
         val engine = BidirectionalThrottlingEngine.fromConfig(
             config = config,
-            timeSourceMs = { simulatedTimeMs },
-            timeSourceNanos = { simulatedTimeMs * 1_000_000L }
+            clock = MonotonicClock.ofMillis { simulatedTimeMs }
         )
 
         // Verify MTU burst capacity floor on uplink (10 kbps -> 1250 B/s, but burst floor is MIN_BURST_CAPACITY_BYTES = 1500B)
@@ -186,8 +183,7 @@ class BidirectionalThrottlingEngineTest {
 
         val engine = BidirectionalThrottlingEngine.fromConfig(
             config = config,
-            timeSourceMs = { simulatedTimeMs },
-            timeSourceNanos = { simulatedTimeMs * 1_000_000L }
+            clock = MonotonicClock.ofMillis { simulatedTimeMs }
         )
 
         val p1 = ByteArray(1000) { 1 }
@@ -208,7 +204,10 @@ class BidirectionalThrottlingEngineTest {
         assertTrue(r3 is PacketResult.Enqueued)
         val p3ReleaseTime = (r3 as PacketResult.Enqueued).scheduledReleaseTimeMs
 
-        assertTrue("P3 scheduled time ($p3ReleaseTime) must be strictly after P2 ($p2ReleaseTime)", p3ReleaseTime > p2ReleaseTime)
+        assertTrue(
+            "P3 scheduled time ($p3ReleaseTime) must be strictly after P2 ($p2ReleaseTime)",
+            p3ReleaseTime > p2ReleaseTime
+        )
 
         // Advance time to release P2
         simulatedTimeMs = p2ReleaseTime
@@ -241,8 +240,7 @@ class BidirectionalThrottlingEngineTest {
 
         val engine = BidirectionalThrottlingEngine.fromConfig(
             config = config,
-            timeSourceMs = { simulatedTimeMs },
-            timeSourceNanos = { simulatedTimeMs * 1_000_000L }
+            clock = MonotonicClock.ofMillis { simulatedTimeMs }
         )
 
         // Cota del carril masivo: max(2 × MTU, 2500 B/s × (500 + 250) ms) = 3_000 B
@@ -273,8 +271,7 @@ class BidirectionalThrottlingEngineTest {
         val config = ThrottleConfig(downKbps = 128, upKbps = 128, latencyMs = 200, jitterMs = 0, packetLossPercent = 0f)
         val engine = BidirectionalThrottlingEngine.fromConfig(
             config = config,
-            timeSourceMs = { simulatedTimeMs },
-            timeSourceNanos = { simulatedTimeMs * 1_000_000L }
+            clock = MonotonicClock.ofMillis { simulatedTimeMs }
         )
         // 16_000 B/s × (500 + 100) ms = 9_600 B; umbral 75 % = 7_200 B
         val capacity = engine.downlinkEngine.bulkCapacityBytes

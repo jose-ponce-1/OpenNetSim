@@ -1,32 +1,20 @@
 schema: spec-driven
 
-# Project context (optional)
-# Add only constraints that should guide OpenSpec artifacts and workflows.
-# Include constraints an agent cannot infer by reading the code.
-# Keep general project documentation and discoverable codebase facts out.
-# Example:
-#   context: |
-#     Designs and tasks must cover Windows, macOS, and Linux
-#     Write all artifacts in Spanish
+# Contexto del proyecto: solo restricciones que no se deducen leyendo el código.
+context: |
+  Todos los artefactos (proposal, design, specs, tasks) se escriben en español.
+  OpenNetSim es una herramienta de QA: nunca debe cambiar en silencio las condiciones de red bajo prueba.
+  `core/` es Kotlin puro: sin imports de Android, para probarlo en la JVM.
+  Toda medida de tiempo del motor, de los forwarders y del servicio usa el reloj monotónico (`MonotonicClock`), nunca el reloj de pared.
+  Prohibido cambiar versiones mayores de AGP, Kotlin, Gradle o Compose sin comprobar antes la matriz de compatibilidad de AGP.
+  La puerta de calidad es `compileDebugKotlin`, `detekt`, `lintDebug` y `testDebugUnitTest`; la CI de GitHub Actions la ejecuta en cada push y PR.
+  La verificación en dispositivo o emulador es obligatoria para cambios en `service/`.
 
-# Per-artifact rules (optional)
-# Add custom rules for specific artifacts.
-# Example:
-#   rules:
-#     proposal:
-#       - Keep proposals under 500 words
-#       - Always state what is out of scope
-#     tasks:
-#       - Break tasks into chunks of max 2 hours
-
-# Per-operation guidance (optional)
-# Add advisory guidance for how apply and archive work should be conducted.
-# This is separate from artifact rules above.
-# Example:
-#   operations:
-#     apply:
-#       guidance:
-#         - Keep test summaries concise
-#     archive:
-#       guidance:
-#         - Summarize the archive outcome before finishing
+rules:
+  proposal:
+    - Escribir en español
+    - Indicar siempre el alcance excluido (sección "Fuera de alcance")
+  specs:
+    - Escribir en español, con las palabras clave SHALL y escenarios GIVEN/WHEN/THEN
+  tasks:
+    - Cada tarea termina con un criterio "verificar …" ejecutable

@@ -1,8 +1,8 @@
-﻿package com.opennetsim.core.engine
+package com.opennetsim.core.engine
 
+import com.opennetsim.core.time.MonotonicClock
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -18,7 +18,7 @@ class LatencyQueueTest {
         val queue = LatencyQueue(
             baseLatencyMs = 100L,
             jitterMs = 0L,
-            timeSourceMs = { simulatedTimeMs }
+            clock = MonotonicClock.ofMillis { simulatedTimeMs }
         )
 
         val packetA = byteArrayOf(1)
@@ -59,7 +59,7 @@ class LatencyQueueTest {
         val queue = LatencyQueue(
             baseLatencyMs = 50L,
             jitterMs = 0L,
-            timeSourceMs = { simulatedTimeMs }
+            clock = MonotonicClock.ofMillis { simulatedTimeMs }
         )
 
         queue.enqueue(byteArrayOf(1), currentTimeMs = 10_000L) // Release: 10_050
@@ -85,7 +85,7 @@ class LatencyQueueTest {
         val queue = LatencyQueue(
             baseLatencyMs = 200L,
             jitterMs = 0L,
-            timeSourceMs = { simulatedTimeMs }
+            clock = MonotonicClock.ofMillis { simulatedTimeMs }
         )
 
         assertNull(queue.timeUntilNextReadyMs(simulatedTimeMs))
@@ -105,7 +105,7 @@ class LatencyQueueTest {
         val queue = LatencyQueue(
             baseLatencyMs = baseDelay,
             jitterMs = jitterLimit,
-            timeSourceMs = { 1000L }
+            clock = MonotonicClock.ofMillis { 1000L }
         )
 
         // Probar 100 inserciones y verificar que todos los retardos estén en [base - jitter, base + jitter]
@@ -122,4 +122,3 @@ class LatencyQueueTest {
         }
     }
 }
-

@@ -49,4 +49,3 @@ fun OpenNetSimTheme(
         content = content
     )
 }
-
