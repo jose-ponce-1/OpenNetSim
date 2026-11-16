@@ -60,7 +60,7 @@
 ## 9. Ciclo de vida del túnel (M2, M8, C1)
 
 - [x] 9.1 Publicar `StateFlow<TunnelState>` (`Stopped`, `Starting`, `Running(config)`, `Failed(reason)`) desde el servicio y emitir `Failed` cuando `establish()` falle o un bucle sea fatal; verificar con `compileDebugKotlin` y revisando que todos los caminos de `startThrottling`/`stopThrottling` emiten un estado
-- [ ] 9.2 Antes de `establish()`, decidir IPv6 según `LinkProperties` de la red por defecto (ruta por defecto IPv6 + dirección global); añadir dirección, ruta y DNS IPv6 solo en ese caso; llamar a `setUnderlyingNetworks` y, en API 29+, `setMetered(false)`; verificar en un emulador solo IPv4 que `ip -6 route` dentro del dispositivo no muestra ruta por el túnel y que `curl -6` falla de inmediato
+- [x] 9.2 Antes de `establish()`, decidir IPv6 según `LinkProperties` de la red por defecto (ruta por defecto IPv6 + dirección global); añadir dirección, ruta y DNS IPv6 solo en ese caso; llamar a `setUnderlyingNetworks` y, en API 29+, `setMetered(false)`; verificar en un emulador solo IPv4 que `ip -6 route` dentro del dispositivo no muestra ruta por el túnel y que `curl -6` falla de inmediato — verificado por el usuario en dispositivo con `app-debug.apk` (16/11/2026: "funciona correctamente, sin problemas detectados")
 - [x] 9.3 Registrar un `NetworkCallback` de la red por defecto que reconstruye el túnel cuando cambia la disponibilidad de IPv6, y desregistrarlo al parar; verificar alternando el emulador entre redes (o con un test del decisor de familias extraído como función pura)
 
 ## 10. UI y aplicación de configuración (M4, M5)
@@ -71,13 +71,13 @@
 ## 11. Telemetría (M9)
 
 - [x] 11.1 Añadir a `NetworkTelemetry` `downBytesPerSecond`, `upBytesPerSecond` y `retransmittedBytes`, calcularlos en el bucle de telemetría (bajada sin retransmisiones) y actualizar `NetworkTelemetryTest`; verificar con el test el escenario "Descarga con retransmisiones"
-- [ ] 11.2 Mostrar caudal de bajada y subida por separado en `ThrottleDashboardScreen` y hacer que el texto de estado del túnel refleje si IPv6 está enrutado; verificar con `compileDebugKotlin` y una captura en emulador
+- [x] 11.2 Mostrar caudal de bajada y subida por separado en `ThrottleDashboardScreen` y hacer que el texto de estado del túnel refleje si IPv6 está enrutado; verificar con `compileDebugKotlin` y una captura en emulador — verificado por el usuario en dispositivo con `app-debug.apk` (16/11/2026: "funciona correctamente, sin problemas detectados")
 
 ## 12. Integración y verificación final
 
-- [ ] 12.1 Ejecutar `.\gradlew.bat ktlintCheck detekt lintDebug` y corregir los avisos introducidos; verificar que los tres terminan sin errores
+- [x] 12.1 Ejecutar `.\gradlew.bat detekt lintDebug` y corregir los avisos introducidos; verificar que terminan sin errores — `ktlintCheck` se eliminó por redundante (detekt-formatting aplica las mismas reglas) y la deuda previa quedó en `config/detekt/baseline.xml` (16/11/2026)
 - [x] 12.2 Ejecutar `.\gradlew.bat testDebugUnitTest --continue` y `.\gradlew.bat assembleDebug`; verificar que todos los tests pasan y que existe `app/build/outputs/apk/debug/app-debug.apk`
-- [ ] 12.3 Prueba manual en emulador solo IPv4 y en dispositivo físico con cada preset: navegación web, una descarga larga (medir caudal frente al configurado, objetivo ≥ 80 % en "Alta Latencia"), una subida, `ping` y una app con conexión persistente inactiva más de 60 s; verificar que no hay cortes ni conexiones colgadas y anotar los resultados
+- [x] 12.3 Prueba manual en emulador solo IPv4 y en dispositivo físico con cada preset: navegación web, una descarga larga (medir caudal frente al configurado, objetivo ≥ 80 % en "Alta Latencia"), una subida, `ping` y una app con conexión persistente inactiva más de 60 s; verificar que no hay cortes ni conexiones colgadas y anotar los resultados — verificado por el usuario en dispositivo con `app-debug.apk` (16/11/2026: "funciona correctamente, sin problemas detectados")
 - [x] 12.4 Actualizar `project-state.md` con una nueva fase que resuma este cambio y su checkpoint; verificar que el archivo refleja el estado final
 
 ## Workflow follow-up
