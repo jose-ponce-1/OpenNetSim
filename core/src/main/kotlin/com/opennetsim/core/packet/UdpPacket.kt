@@ -50,9 +50,7 @@ data class UdpPacket(
     fun toIpPacket(srcIp: ByteArray, dstIp: ByteArray): IpPacket {
         val udpData = toByteArray(srcIp, dstIp)
         return IpPacket(
-            version = 4,
-            ihl = 5,
-            totalLength = 20 + udpData.size,
+            totalLength = IpPacket.HEADER_SIZE + udpData.size,
             protocol = IpPacket.PROTOCOL_UDP,
             sourceIp = srcIp,
             destinationIp = dstIp,
@@ -66,7 +64,6 @@ data class UdpPacket(
     fun toIpv6Packet(srcIp: ByteArray, dstIp: ByteArray): Ipv6Packet {
         val udpData = toByteArray(srcIp, dstIp)
         return Ipv6Packet(
-            version = 6,
             payloadLength = udpData.size,
             nextHeader = Ipv6Packet.PROTOCOL_UDP,
             sourceIp = srcIp,
@@ -105,30 +102,23 @@ data class UdpPacket(
          * Parsea un datagrama UDP a partir de los bytes del payload de un paquete IP.
          */
         fun parse(data: ByteArray, offset: Int = 0, length: Int = data.size): UdpPacket? {
-            if (length < HEADER_SIZE) return null
-
-            val sourcePort = ((data[offset].toInt() and 0xFF) shl 8) or (data[offset + 1].toInt() and 0xFF)
-            val destinationPort = ((data[offset + 2].toInt() and 0xFF) shl 8) or (data[offset + 3].toInt() and 0xFF)
-            val udpLength = ((data[offset + 4].toInt() and 0xFF) shl 8) or (data[offset + 5].toInt() and 0xFF)
-            val checksum = ((data[offset + 6].toInt() and 0xFF) shl 8) or (data[offset + 7].toInt() and 0xFF)
-
-            if (length < udpLength || udpLength < HEADER_SIZE) return null
-
-            val payloadLength = udpLength - HEADER_SIZE
-            // Única copia del camino de subida: el datagrama se envía después desde otro hilo.
-            val payload = if (payloadLength > 0) {
-                data.copyOfRange(offset + HEADER_SIZE, offset + udpLength)
-            } else {
-                PacketBytes.EMPTY
-            }
-
+            val udpLength = validDatagramLength(data, offset, length)
+            if (udpLength == PacketBytes.INVALID) return null
             return UdpPacket(
-                sourcePort = sourcePort,
-                destinationPort = destinationPort,
+                sourcePort = PacketBytes.readU16(data, offset),
+                destinationPort = PacketBytes.readU16(data, offset + DESTINATION_PORT_OFFSET),
                 length = udpLength,
-                checksum = checksum,
-                payload = payload
+                checksum = PacketBytes.readU16(data, offset + CHECKSUM_OFFSET),
+                // Única copia del camino de subida: el datagrama se envía después desde otro hilo.
+                payload = PacketBytes.slice(data, offset + HEADER_SIZE, offset + udpLength)
             )
+        }
+
+        /** Longitud UDP declarada si cabe en [length] y cubre la cabecera; si no, [PacketBytes.INVALID]. */
+        private fun validDatagramLength(data: ByteArray, offset: Int, length: Int): Int {
+            if (length < HEADER_SIZE) return PacketBytes.INVALID
+            val udpLength = PacketBytes.readU16(data, offset + LENGTH_OFFSET)
+            return if (udpLength in HEADER_SIZE..length) udpLength else PacketBytes.INVALID
         }
     }
 }

@@ -11,7 +11,7 @@ class PacketLossSimulatorTest {
     fun testZeroProbabilityNeverDrops() {
         val simulator = PacketLossSimulator(initialLossProbability = 0.0)
 
-        for (i in 0 until 1000) {
+        repeat(1000) {
             assertFalse(simulator.shouldDrop())
         }
     }
@@ -20,7 +20,7 @@ class PacketLossSimulatorTest {
     fun testOneHundredPercentProbabilityAlwaysDrops() {
         val simulator = PacketLossSimulator(initialLossProbability = 1.0)
 
-        for (i in 0 until 1000) {
+        repeat(1000) {
             assertTrue(simulator.shouldDrop())
         }
     }
@@ -33,7 +33,7 @@ class PacketLossSimulatorTest {
         val totalTrials = 10_000
         var droppedCount = 0
 
-        for (i in 0 until totalTrials) {
+        repeat(totalTrials) {
             if (simulator.shouldDrop()) {
                 droppedCount++
             }

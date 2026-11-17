@@ -8,9 +8,10 @@ data class TcpPacket(
     val destinationPort: Int,
     val sequenceNumber: Long,
     val acknowledgmentNumber: Long,
-    val dataOffset: Int = 5, // En palabras de 32 bits (5 = 20 bytes sin opciones)
+    /** Longitud de la cabecera en palabras de 32 bits (5 = 20 bytes, sin opciones). */
+    val dataOffset: Int = MIN_DATA_OFFSET,
     val flags: Int,
-    val windowSize: Int = 65535,
+    val windowSize: Int = DEFAULT_WINDOW,
     val checksum: Int = 0,
     val urgentPointer: Int = 0,
     val options: ByteArray = PacketBytes.EMPTY,
@@ -78,9 +79,7 @@ data class TcpPacket(
     fun toIpPacket(srcIp: ByteArray, dstIp: ByteArray): IpPacket {
         val tcpData = toByteArray(srcIp, dstIp)
         return IpPacket(
-            version = 4,
-            ihl = 5,
-            totalLength = 20 + tcpData.size,
+            totalLength = IpPacket.HEADER_SIZE + tcpData.size,
             protocol = IpPacket.PROTOCOL_TCP,
             sourceIp = srcIp,
             destinationIp = dstIp,
@@ -94,7 +93,6 @@ data class TcpPacket(
     fun toIpv6Packet(srcIp: ByteArray, dstIp: ByteArray): Ipv6Packet {
         val tcpData = toByteArray(srcIp, dstIp)
         return Ipv6Packet(
-            version = 6,
             payloadLength = tcpData.size,
             nextHeader = Ipv6Packet.PROTOCOL_TCP,
             sourceIp = srcIp,
@@ -122,13 +120,13 @@ data class TcpPacket(
 
     override fun hashCode(): Int {
         var result = sourcePort
-        result = 31 * result + destinationPort
-        result = 31 * result + sequenceNumber.hashCode()
-        result = 31 * result + acknowledgmentNumber.hashCode()
-        result = 31 * result + flags
-        result = 31 * result + windowSize
-        result = 31 * result + options.contentHashCode()
-        result = 31 * result + payload.contentHashCode()
+        result = HASH_MULTIPLIER * result + destinationPort
+        result = HASH_MULTIPLIER * result + sequenceNumber.hashCode()
+        result = HASH_MULTIPLIER * result + acknowledgmentNumber.hashCode()
+        result = HASH_MULTIPLIER * result + flags
+        result = HASH_MULTIPLIER * result + windowSize
+        result = HASH_MULTIPLIER * result + options.contentHashCode()
+        result = HASH_MULTIPLIER * result + payload.contentHashCode()
         return result
     }
 
@@ -142,7 +140,14 @@ data class TcpPacket(
 
         const val HEADER_MIN_SIZE = 20
 
+        /** Ventana por defecto: el máximo sin escala. */
+        const val DEFAULT_WINDOW = 65_535
+        private const val MIN_DATA_OFFSET = 5
         private const val WORD_BYTES = 4
+        private const val BYTE_MASK = 0xFF
+        private const val HIGH_NIBBLE_MASK = 0xF0
+        private const val SEQUENCE_MASK = 0xFFFFFFFFL
+        private const val HASH_MULTIPLIER = 31
         private const val LOW_NIBBLE_MASK = 0x0F
         private const val NIBBLE_BITS = 4
         private const val DESTINATION_PORT_OFFSET = 2
@@ -158,62 +163,30 @@ data class TcpPacket(
          * Parsea un segmento TCP a partir de los bytes del payload de un paquete IP.
          */
         fun parse(data: ByteArray, offset: Int = 0, length: Int = data.size): TcpPacket? {
-            if (length < HEADER_MIN_SIZE) return null
-
-            val sourcePort = ((data[offset].toInt() and 0xFF) shl 8) or (data[offset + 1].toInt() and 0xFF)
-            val destinationPort = ((data[offset + 2].toInt() and 0xFF) shl 8) or (data[offset + 3].toInt() and 0xFF)
-
-            val seqNum = (
-                ((data[offset + 4].toLong() and 0xFF) shl 24) or
-                    ((data[offset + 5].toLong() and 0xFF) shl 16) or
-                    ((data[offset + 6].toLong() and 0xFF) shl 8) or
-                    (data[offset + 7].toLong() and 0xFF)
-                ) and 0xFFFFFFFFL
-
-            val ackNum = (
-                ((data[offset + 8].toLong() and 0xFF) shl 24) or
-                    ((data[offset + 9].toLong() and 0xFF) shl 16) or
-                    ((data[offset + 10].toLong() and 0xFF) shl 8) or
-                    (data[offset + 11].toLong() and 0xFF)
-                ) and 0xFFFFFFFFL
-
-            val dataOffset = (data[offset + 12].toInt() and 0xF0) ushr 4
-            val headerLength = dataOffset * 4
-            if (headerLength < HEADER_MIN_SIZE || length < headerLength) return null
-
-            val flags = data[offset + 13].toInt() and 0xFF
-            val windowSize = ((data[offset + 14].toInt() and 0xFF) shl 8) or (data[offset + 15].toInt() and 0xFF)
-            val checksum = ((data[offset + 16].toInt() and 0xFF) shl 8) or (data[offset + 17].toInt() and 0xFF)
-            val urgentPointer = ((data[offset + 18].toInt() and 0xFF) shl 8) or (data[offset + 19].toInt() and 0xFF)
-
-            val optionsLength = headerLength - HEADER_MIN_SIZE
-            val options = if (optionsLength > 0) {
-                data.copyOfRange(offset + HEADER_MIN_SIZE, offset + headerLength)
-            } else {
-                PacketBytes.EMPTY
-            }
-
-            val payloadLength = length - headerLength
-            // Única copia del camino de subida: el búfer de recepción guarda y entrega este array.
-            val payload = if (payloadLength > 0) {
-                data.copyOfRange(offset + headerLength, offset + length)
-            } else {
-                PacketBytes.EMPTY
-            }
-
+            val headerLength = validHeaderLength(data, offset, length)
+            if (headerLength == PacketBytes.INVALID) return null
             return TcpPacket(
-                sourcePort = sourcePort,
-                destinationPort = destinationPort,
-                sequenceNumber = seqNum,
-                acknowledgmentNumber = ackNum,
-                dataOffset = dataOffset,
-                flags = flags,
-                windowSize = windowSize,
-                checksum = checksum,
-                urgentPointer = urgentPointer,
-                options = options,
-                payload = payload
+                sourcePort = PacketBytes.readU16(data, offset),
+                destinationPort = PacketBytes.readU16(data, offset + DESTINATION_PORT_OFFSET),
+                sequenceNumber = PacketBytes.readU32(data, offset + SEQUENCE_OFFSET),
+                acknowledgmentNumber = PacketBytes.readU32(data, offset + ACK_OFFSET),
+                dataOffset = headerLength / WORD_BYTES,
+                flags = data[offset + FLAGS_OFFSET].toInt() and BYTE_MASK,
+                windowSize = PacketBytes.readU16(data, offset + WINDOW_OFFSET),
+                checksum = PacketBytes.readU16(data, offset + CHECKSUM_OFFSET),
+                urgentPointer = PacketBytes.readU16(data, offset + URGENT_OFFSET),
+                options = PacketBytes.slice(data, offset + HEADER_MIN_SIZE, offset + headerLength),
+                // Única copia del camino de subida: el búfer de recepción guarda y entrega este array.
+                payload = PacketBytes.slice(data, offset + headerLength, offset + length)
             )
+        }
+
+        /** Longitud de la cabecera si [data] empieza por una cabecera TCP completa; si no, [PacketBytes.INVALID]. */
+        private fun validHeaderLength(data: ByteArray, offset: Int, length: Int): Int {
+            if (length < HEADER_MIN_SIZE) return PacketBytes.INVALID
+            val dataOffset = (data[offset + DATA_OFFSET_OFFSET].toInt() and HIGH_NIBBLE_MASK) ushr NIBBLE_BITS
+            val headerLength = dataOffset * WORD_BYTES
+            return if (headerLength >= HEADER_MIN_SIZE && length >= headerLength) headerLength else PacketBytes.INVALID
         }
 
         /**
@@ -225,7 +198,7 @@ data class TcpPacket(
             dstPort: Int,
             seqNum: Long,
             ackNum: Long,
-            windowSize: Int = 65535,
+            windowSize: Int = DEFAULT_WINDOW,
             options: TcpOptions = TcpOptions()
         ): TcpPacket {
             val encodedOptions = options.encode()
@@ -234,7 +207,7 @@ data class TcpPacket(
                 destinationPort = dstPort,
                 sequenceNumber = seqNum,
                 acknowledgmentNumber = ackNum,
-                dataOffset = 5 + encodedOptions.size / 4,
+                dataOffset = MIN_DATA_OFFSET + encodedOptions.size / WORD_BYTES,
                 flags = FLAG_SYN or FLAG_ACK,
                 windowSize = windowSize,
                 options = encodedOptions
@@ -249,7 +222,7 @@ data class TcpPacket(
             dstPort: Int,
             seqNum: Long,
             ackNum: Long,
-            windowSize: Int = 65535
+            windowSize: Int = DEFAULT_WINDOW
         ): TcpPacket {
             return TcpPacket(
                 sourcePort = srcPort,
@@ -264,13 +237,14 @@ data class TcpPacket(
         /**
          * Crea un paquete PSH-ACK con datos de carga útil (payload).
          */
+        @Suppress("LongParameterList") // Un segmento por llamada en la bajada: agruparlos reservaría otro objeto.
         fun buildPshAck(
             srcPort: Int,
             dstPort: Int,
             seqNum: Long,
             ackNum: Long,
             payload: ByteArray,
-            windowSize: Int = 65535
+            windowSize: Int = DEFAULT_WINDOW
         ): TcpPacket {
             return TcpPacket(
                 sourcePort = srcPort,
@@ -291,7 +265,7 @@ data class TcpPacket(
             dstPort: Int,
             seqNum: Long,
             ackNum: Long,
-            windowSize: Int = 65535
+            windowSize: Int = DEFAULT_WINDOW
         ): TcpPacket {
             return TcpPacket(
                 sourcePort = srcPort,
@@ -329,8 +303,8 @@ data class TcpPacket(
             TcpPacket(
                 sourcePort = srcPort,
                 destinationPort = dstPort,
-                sequenceNumber = seqNum and 0xFFFFFFFFL,
-                acknowledgmentNumber = ackNum and 0xFFFFFFFFL,
+                sequenceNumber = seqNum and SEQUENCE_MASK,
+                acknowledgmentNumber = ackNum and SEQUENCE_MASK,
                 flags = FLAG_RST or FLAG_ACK,
                 windowSize = 0
             )

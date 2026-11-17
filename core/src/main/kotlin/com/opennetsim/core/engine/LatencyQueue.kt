@@ -150,14 +150,11 @@ class LatencyQueue(
     @Synchronized
     fun drainReady(currentTimeMs: Long = clock.nowMs()): List<ByteArray> {
         val ready = mutableListOf<ByteArray>()
-        while (true) {
-            val next = queue.peek() ?: break
-            if (next.scheduledReleaseTimeMs <= currentTimeMs) {
-                val polled = queue.poll() ?: break
-                ready.add(polled.data)
-            } else {
-                break
-            }
+        var next = queue.peek()
+        while (next != null && next.scheduledReleaseTimeMs <= currentTimeMs) {
+            queue.poll()
+            ready.add(next.data)
+            next = queue.peek()
         }
         return ready
     }

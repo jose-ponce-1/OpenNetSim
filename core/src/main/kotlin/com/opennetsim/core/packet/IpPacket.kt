@@ -1,7 +1,5 @@
 package com.opennetsim.core.packet
 
-import java.nio.ByteBuffer
-
 /**
  * Representación y parser de paquetes IPv4 (RFC 791).
  *
@@ -12,15 +10,19 @@ import java.nio.ByteBuffer
  */
 @Suppress("LongParameterList") // Campos de la cabecera IPv4, casi todos con valor por defecto.
 class IpPacket(
-    val version: Int = 4,
-    val ihl: Int = 5,
+    val version: Int = VERSION,
+    val ihl: Int = MIN_IHL,
     val dscpEcn: Int = 0,
     val totalLength: Int,
     val identification: Int = 0,
-    val flags: Int = 0x40, // Don't Fragment flag (DF)
+    /**
+     * Flags de 3 bits. El valor por defecto (0x40, el bit DF en su posición del byte 6) no cabe en 3 bits
+     * y [toByteArray] lo serializa como 0: los paquetes que crea la app salen sin flags.
+     */
+    val flags: Int = DEFAULT_FLAGS,
     val fragmentOffset: Int = 0,
-    val ttl: Int = 64,
-    val protocol: Int, // 6 = TCP, 17 = UDP
+    val ttl: Int = DEFAULT_TTL,
+    val protocol: Int,
     val headerChecksum: Int = 0,
     val sourceIp: ByteArray,
     val destinationIp: ByteArray,
@@ -29,8 +31,8 @@ class IpPacket(
     val payloadSize: Int = payload.size - payloadOffset
 ) {
     init {
-        require(sourceIp.size == 4) { "sourceIp debe tener exactamente 4 bytes" }
-        require(destinationIp.size == 4) { "destinationIp debe tener exactamente 4 bytes" }
+        require(sourceIp.size == ADDRESS_BYTES) { "sourceIp debe tener exactamente 4 bytes" }
+        require(destinationIp.size == ADDRESS_BYTES) { "destinationIp debe tener exactamente 4 bytes" }
         require(payloadOffset >= 0 && payloadSize >= 0 && payloadOffset + payloadSize <= payload.size) {
             "La vista del payload se sale del array"
         }
@@ -59,55 +61,25 @@ class IpPacket(
         get() = formatIp(destinationIp)
 
     /**
-     * Serializa el paquete IPv4 completo a un ByteArray con el checksum de cabecera recalculado.
+     * Serializa el paquete IPv4 completo a un ByteArray con el checksum de cabecera recalculado. La
+     * longitud total se calcula de la cabecera y el payload, no se toma de [totalLength].
      */
     fun toByteArray(): ByteArray {
-        val headerLength = ihl * 4
-        val totalPacketLength = headerLength + payloadSize
-        val buffer = ByteBuffer.allocate(totalPacketLength)
-
-        // Byte 0: Version (4 bits) + IHL (4 bits)
-        val verIhl = ((version and 0x0F) shl 4) or (ihl and 0x0F)
-        buffer.put(verIhl.toByte())
-
-        // Byte 1: DSCP / ECN
-        buffer.put(dscpEcn.toByte())
-
-        // Bytes 2-3: Total Length
-        buffer.putShort(totalPacketLength.toShort())
-
-        // Bytes 4-5: Identification
-        buffer.putShort(identification.toShort())
-
-        // Bytes 6-7: Flags (3 bits) + Fragment Offset (13 bits)
-        val flagsAndOffset = ((flags and 0x07) shl 13) or (fragmentOffset and 0x1FFF)
-        buffer.putShort(flagsAndOffset.toShort())
-
-        // Byte 8: TTL
-        buffer.put(ttl.toByte())
-
-        // Byte 9: Protocol
-        buffer.put(protocol.toByte())
-
-        // Bytes 10-11: Checksum inicializado a 0 para el cálculo
-        buffer.putShort(0.toShort())
-
-        // Bytes 12-15: Source IP
-        buffer.put(sourceIp)
-
-        // Bytes 16-19: Destination IP
-        buffer.put(destinationIp)
-
-        // Calcular y escribir el checksum de la cabecera IPv4
-        val headerBytes = buffer.array()
-        val calculatedChecksum = ChecksumUtils.calculateChecksum(headerBytes, 0, headerLength)
-        buffer.putShort(10, calculatedChecksum.toShort())
-
-        // Payload
-        buffer.position(headerLength)
-        buffer.put(payloadBuffer, payloadOffset, payloadSize)
-
-        return buffer.array()
+        val headerLength = ihl * WORD_BYTES
+        val out = ByteArray(headerLength + payloadSize)
+        out[0] = (((version and NIBBLE_MASK) shl NIBBLE_BITS) or (ihl and NIBBLE_MASK)).toByte()
+        out[DSCP_ECN_OFFSET] = dscpEcn.toByte()
+        PacketBytes.writeU16(out, TOTAL_LENGTH_OFFSET, out.size)
+        PacketBytes.writeU16(out, IDENTIFICATION_OFFSET, identification)
+        val flagsAndOffset = ((flags and FLAGS_MASK) shl FLAGS_SHIFT) or (fragmentOffset and FRAGMENT_OFFSET_MASK)
+        PacketBytes.writeU16(out, FLAGS_OFFSET, flagsAndOffset)
+        out[TTL_OFFSET] = ttl.toByte()
+        out[PROTOCOL_OFFSET] = protocol.toByte()
+        System.arraycopy(sourceIp, 0, out, SOURCE_OFFSET, ADDRESS_BYTES)
+        System.arraycopy(destinationIp, 0, out, DESTINATION_OFFSET, ADDRESS_BYTES)
+        PacketBytes.writeU16(out, CHECKSUM_OFFSET, ChecksumUtils.calculateChecksum(out, 0, headerLength))
+        System.arraycopy(payloadBuffer, payloadOffset, out, headerLength, payloadSize)
+        return out
     }
 
     override fun equals(other: Any?): Boolean {
@@ -127,11 +99,11 @@ class IpPacket(
 
     override fun hashCode(): Int {
         var result = version
-        result = 31 * result + ihl
-        result = 31 * result + protocol
-        result = 31 * result + sourceIp.contentHashCode()
-        result = 31 * result + destinationIp.contentHashCode()
-        result = 31 * result + payload.contentHashCode()
+        result = HASH_MULTIPLIER * result + ihl
+        result = HASH_MULTIPLIER * result + protocol
+        result = HASH_MULTIPLIER * result + sourceIp.contentHashCode()
+        result = HASH_MULTIPLIER * result + destinationIp.contentHashCode()
+        result = HASH_MULTIPLIER * result + payload.contentHashCode()
         return result
     }
 
@@ -142,9 +114,23 @@ class IpPacket(
 
         /** Cabecera sin opciones (IHL = 5), la única que construye la app. */
         const val HEADER_SIZE = 20
+        private const val VERSION = 4
+        private const val MIN_IHL = 5
         private const val VERSION_IHL = 0x45
         private const val DEFAULT_TTL = 64
+        private const val DEFAULT_FLAGS = 0x40
+        private const val WORD_BYTES = 4
+        private const val NIBBLE_BITS = 4
+        private const val NIBBLE_MASK = 0x0F
+        private const val BYTE_MASK = 0xFF
+        private const val FLAGS_MASK = 0x07
+        private const val FLAGS_SHIFT = 13
+        private const val FRAGMENT_OFFSET_MASK = 0x1FFF
+        private const val HASH_MULTIPLIER = 31
+        private const val DSCP_ECN_OFFSET = 1
         private const val TOTAL_LENGTH_OFFSET = 2
+        private const val IDENTIFICATION_OFFSET = 4
+        private const val FLAGS_OFFSET = 6
         private const val TTL_OFFSET = 8
         private const val PROTOCOL_OFFSET = 9
         private const val CHECKSUM_OFFSET = 10
@@ -177,14 +163,14 @@ class IpPacket(
         }
 
         fun formatIp(ipBytes: ByteArray): String {
-            if (ipBytes.size != 4) return "0.0.0.0"
-            return "${ipBytes[0].toInt() and 0xFF}.${ipBytes[1].toInt() and 0xFF}.${ipBytes[2].toInt() and 0xFF}.${ipBytes[3].toInt() and 0xFF}"
+            if (ipBytes.size != ADDRESS_BYTES) return "0.0.0.0"
+            return ipBytes.joinToString(".") { (it.toInt() and BYTE_MASK).toString() }
         }
 
         fun parseIp(ipString: String): ByteArray {
             val parts = ipString.split(".")
-            require(parts.size == 4) { "Formato IP inválido: $ipString" }
-            return ByteArray(4) { parts[it].toInt().toByte() }
+            require(parts.size == ADDRESS_BYTES) { "Formato IP inválido: $ipString" }
+            return ByteArray(ADDRESS_BYTES) { parts[it].toInt().toByte() }
         }
 
         /**
@@ -192,50 +178,44 @@ class IpPacket(
          * Retorna null si los datos no son un paquete IPv4 válido o están truncados.
          */
         fun parse(data: ByteArray, offset: Int = 0, length: Int = data.size): IpPacket? {
-            if (length < 20) return null
-
-            val byte0 = data[offset].toInt() and 0xFF
-            val version = byte0 shr 4
-            if (version != 4) return null // Solo IPv4
-
-            val ihl = byte0 and 0x0F
-            val headerLength = ihl * 4
-            if (headerLength < 20 || length < headerLength) return null
-
-            val dscpEcn = data[offset + 1].toInt() and 0xFF
-            val totalLength = ((data[offset + 2].toInt() and 0xFF) shl 8) or (data[offset + 3].toInt() and 0xFF)
-            if (length < totalLength) return null
-
-            val identification = ((data[offset + 4].toInt() and 0xFF) shl 8) or (data[offset + 5].toInt() and 0xFF)
-            val flagsAndOffset = ((data[offset + 6].toInt() and 0xFF) shl 8) or (data[offset + 7].toInt() and 0xFF)
-            val flags = (flagsAndOffset shr 13) and 0x07
-            val fragmentOffset = flagsAndOffset and 0x1FFF
-
-            val ttl = data[offset + 8].toInt() and 0xFF
-            val protocol = data[offset + 9].toInt() and 0xFF
-            val headerChecksum = ((data[offset + 10].toInt() and 0xFF) shl 8) or (data[offset + 11].toInt() and 0xFF)
-
-            val sourceIp = data.copyOfRange(offset + 12, offset + 16)
-            val destinationIp = data.copyOfRange(offset + 16, offset + 20)
-
+            val headerLength = validHeaderLength(data, offset, length)
+            if (headerLength == PacketBytes.INVALID) return null
+            val totalLength = PacketBytes.readU16(data, offset + TOTAL_LENGTH_OFFSET)
+            val flagsAndOffset = PacketBytes.readU16(data, offset + FLAGS_OFFSET)
             return IpPacket(
-                version = version,
-                ihl = ihl,
-                dscpEcn = dscpEcn,
+                version = VERSION,
+                ihl = headerLength / WORD_BYTES,
+                dscpEcn = data[offset + DSCP_ECN_OFFSET].toInt() and BYTE_MASK,
                 totalLength = totalLength,
-                identification = identification,
-                flags = flags,
-                fragmentOffset = fragmentOffset,
-                ttl = ttl,
-                protocol = protocol,
-                headerChecksum = headerChecksum,
-                sourceIp = sourceIp,
-                destinationIp = destinationIp,
+                identification = PacketBytes.readU16(data, offset + IDENTIFICATION_OFFSET),
+                flags = (flagsAndOffset shr FLAGS_SHIFT) and FLAGS_MASK,
+                fragmentOffset = flagsAndOffset and FRAGMENT_OFFSET_MASK,
+                ttl = data[offset + TTL_OFFSET].toInt() and BYTE_MASK,
+                protocol = data[offset + PROTOCOL_OFFSET].toInt() and BYTE_MASK,
+                headerChecksum = PacketBytes.readU16(data, offset + CHECKSUM_OFFSET),
+                sourceIp = address(data, offset + SOURCE_OFFSET),
+                destinationIp = address(data, offset + DESTINATION_OFFSET),
                 payload = data,
                 payloadOffset = offset + headerLength,
-                // Como antes de la vista: un totalLength menor que la cabecera da un payload vacío.
+                // Un totalLength menor que la cabecera da un payload vacío.
                 payloadSize = (totalLength - headerLength).coerceAtLeast(0)
             )
         }
+
+        /**
+         * Longitud de la cabecera si [data] empieza por un paquete IPv4 completo (la cabecera y los
+         * `totalLength` bytes que declara caben en [length]); si no, [PacketBytes.INVALID].
+         */
+        private fun validHeaderLength(data: ByteArray, offset: Int, length: Int): Int {
+            if (length < HEADER_SIZE) return PacketBytes.INVALID
+            val byte0 = data[offset].toInt() and BYTE_MASK
+            val headerLength = (byte0 and NIBBLE_MASK) * WORD_BYTES
+            val totalLength = PacketBytes.readU16(data, offset + TOTAL_LENGTH_OFFSET)
+            val valid = byte0 ushr NIBBLE_BITS == VERSION && headerLength >= HEADER_SIZE &&
+                length >= headerLength && length >= totalLength
+            return if (valid) headerLength else PacketBytes.INVALID
+        }
+
+        private fun address(data: ByteArray, start: Int): ByteArray = data.copyOfRange(start, start + ADDRESS_BYTES)
     }
 }
