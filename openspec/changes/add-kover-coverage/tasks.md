@@ -9,4 +9,4 @@
 ## 2. CI y documentación
 - [x] 2.1 Paso "Cobertura (Kover)" en la CI con `pipefail` y el porcentaje en el resumen del job; verificar el YAML
 - [x] 2.2 Añadir la verificación de cobertura a la puerta de calidad de `openspec/config.yaml`, al README y a `project-state.md`; verificar con `openspec validate add-kover-coverage --strict`
-- [ ] 2.3 Verificar que la CI de GitHub Actions termina en verde y que el resumen del job muestra la cobertura
+- [x] 2.3 Verificar que la CI de GitHub Actions termina en verde y que el resumen del job muestra la cobertura (PR #12: 87,7 % en Linux)

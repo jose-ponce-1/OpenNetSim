@@ -15,5 +15,5 @@
 ## 4. Verificación
 - [x] 4.1 Benchmark antes y después con los jars de los dos commits, seguidos y con 2 forks; verificar que los benchmarks sin cambios (`classify`, `enqueueAndDrain`) quedan a ±2 % y anotar la medición en el design
 - [x] 4.2 Ejecutar la puerta de calidad completa (compilación, `detekt`, `lintDebug`, tests, Kover, `smokeBenchmark` y `assembleRelease`); verificar que termina bien
-- [ ] 4.3 Verificar que la CI de GitHub Actions termina en verde
-- [ ] 4.4 Verificar en dispositivo con la release (cambia `service/`): navegar, test de velocidad a 10 y 50 Mbps (TCP), vídeo o test por QUIC (UDP), ping (ICMP) e IPv6 si la red lo ofrece
+- [x] 4.3 Verificar que la CI de GitHub Actions termina en verde (PR #13)
+- [x] 4.4 Verificar en dispositivo con la release (cambia `service/`): navegar, test de velocidad a 10 y 50 Mbps (TCP), vídeo o test por QUIC (UDP), ping (ICMP) e IPv6 si la red lo ofrece (usuario, 17/11/2026: funciona correctamente)

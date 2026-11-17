@@ -9,4 +9,4 @@
 ## 2. CI y documentación
 - [x] 2.1 Paso de humo (`:benchmark:smokeBenchmark`) en la CI y en la puerta de calidad de `openspec/config.yaml`; verificar el YAML
 - [x] 2.2 README y `project-state.md` con los comandos y la conclusión; verificar con `openspec validate add-packet-microbenchmark --strict`
-- [ ] 2.3 Verificar que la CI de GitHub Actions termina en verde
+- [x] 2.3 Verificar que la CI de GitHub Actions termina en verde (PR #13)
