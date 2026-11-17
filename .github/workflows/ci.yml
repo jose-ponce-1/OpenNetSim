@@ -30,7 +30,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Compilar
-        run: ./gradlew compileDebugKotlin --console=plain
+        run: ./gradlew :core:compileKotlin :app:compileDebugKotlin --console=plain
 
       - name: detekt
         run: ./gradlew detekt --console=plain
@@ -39,7 +39,7 @@ jobs:
         run: ./gradlew lintDebug --console=plain
 
       - name: Tests unitarios
-        run: ./gradlew testDebugUnitTest --continue --console=plain
+        run: ./gradlew :core:test :app:testDebugUnitTest --continue --console=plain
 
       - name: Informes
         if: always()
@@ -49,4 +49,6 @@ jobs:
           path: |
             app/build/reports/
             app/build/test-results/
+            core/build/reports/
+            core/build/test-results/
           retention-days: 7
