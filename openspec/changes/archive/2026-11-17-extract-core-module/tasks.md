@@ -14,4 +14,4 @@
 
 ## 4. Verificación
 - [x] 4.1 Ejecutar `detekt`, `lintDebug`, `:core:test`, `:app:testDebugUnitTest` y `assembleDebug`; verificar que terminan bien
-- [ ] 4.2 Verificar que la CI de GitHub Actions termina en verde con los dos módulos
+- [x] 4.2 Verificar que la CI de GitHub Actions termina en verde con los dos módulos

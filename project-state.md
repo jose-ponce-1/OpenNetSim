@@ -102,7 +102,7 @@ Decisiones del usuario (17/11/2026), tomadas comparando con `tc netem`, Network 
 - [x] `core/` y `model/` en el módulo Gradle `:core`, Kotlin/JVM puro: un `import android.*` ya no compila.
 - [x] Version catalog `gradle/libs.versions.toml` (mismas versiones); detekt configurado en el script raíz con una baseline por módulo (127 entradas, antes 142, ninguna nueva).
 - [x] 175 tests (115 en `:core`, 60 en `:app`, 1 omitido en Windows), `detekt`, `lintDebug` y `assembleDebug` en verde.
-- [ ] CI de GitHub Actions en verde con los dos módulos; después, archivar el cambio.
+- [x] CI de GitHub Actions en verde con los dos módulos (PR #6); cambio archivado.
 
 ---
 
@@ -120,7 +120,7 @@ Decisiones del usuario (17/11/2026), tomadas comparando con `tc netem`, Network 
 ---
 
 ## Punto de Retorno (Checkpoint)
-- **Últimos archivos modificados:** `core/` (módulo nuevo con `core.*` y `model.*`), `gradle/libs.versions.toml`, `build.gradle.kts`, `app/build.gradle.kts`, `settings.gradle.kts`, `config/detekt/`, `.github/workflows/ci.yml` y documentación (Fase 10, rama `refactor/core-module`, que parte de `feat/network-fidelity`).
-- **Estado General:** Fases 1–9 cerradas (la 9 pendiente de fusionar, PR #5); Fase 10 implementada y verificada en local.
+- **Últimos archivos modificados:** `core/` (módulo nuevo con `core.*` y `model.*`), `gradle/libs.versions.toml`, `build.gradle.kts`, `app/build.gradle.kts`, `settings.gradle.kts`, `config/detekt/`, `.github/workflows/ci.yml` y documentación (Fase 10, rama `refactor/core-module`, PR #6).
+- **Estado General:** Fases 1–9 cerradas y fusionadas en `develop`; Fase 10 verificada (local y CI), pendiente de fusionar (PR #6).
 - **Artefacto de Distribución:** APK de depuración en `app/build/outputs/apk/debug/app-debug.apk`.
-- **Siguiente acción inmediata:** CI de la Fase 10 en GitHub; después, el paso 3 de la hoja de ruta (actualizar AGP/Kotlin/Gradle).
+- **Siguiente acción inmediata:** fusionar el PR #6; después, el paso 3 de la hoja de ruta (actualizar AGP/Kotlin/Gradle).
