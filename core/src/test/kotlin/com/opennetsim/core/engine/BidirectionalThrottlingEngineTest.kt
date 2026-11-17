@@ -127,7 +127,8 @@ class BidirectionalThrottlingEngineTest {
 
     @Test
     fun testAsymmetricRateLimitingWithMtuBurstFloor() {
-        // Asymmetric configuration: Uplink heavily throttled (10 kbps = 1250 B/s), Downlink fast (1000 kbps = 125,000 B/s)
+        // Asymmetric configuration: Uplink heavily throttled (10 kbps = 1250 B/s),
+        // Downlink fast (1000 kbps = 125,000 B/s)
         val config = ThrottleConfig(
             downKbps = 1000,
             upKbps = 10,
@@ -142,7 +143,8 @@ class BidirectionalThrottlingEngineTest {
             clock = MonotonicClock.ofMillis { simulatedTimeMs }
         )
 
-        // Verify MTU burst capacity floor on uplink (10 kbps -> 1250 B/s, but burst floor is MIN_BURST_CAPACITY_BYTES = 1500B)
+        // Verify MTU burst capacity floor on uplink (10 kbps -> 1250 B/s,
+        // but burst floor is MIN_BURST_CAPACITY_BYTES = 1500B)
         assertEquals(1500L, engine.uplinkEngine.bandwidthLimiter.burstCapacityBytes)
         // Downlink 1000 kbps -> 125,000 B/s -> ráfaga de 50 ms = 6250 B
         assertEquals(

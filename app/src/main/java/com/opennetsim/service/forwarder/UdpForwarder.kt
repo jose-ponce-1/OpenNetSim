@@ -220,39 +220,52 @@ class UdpForwarder(
     ): Session? {
         taskQueue.checkOwnerThread()
         if (sessions.size >= policy.maxSessions) evictLeastRecentlyActive()
-        val channel = try {
-            DatagramChannel.open()
-        } catch (e: IOException) {
-            diagnostics.warn("udp.open", "No se pudo crear el socket UDP hacia ${describe(key)}", e)
-            return null
-        }
-
+        val channel = openChannel(key) ?: return null
         return try {
             channel.configureBlocking(false)
-            if (!environment.socketProtector.protect(channel.socket())) {
+            if (environment.socketProtector.protect(channel.socket())) {
+                connectSession(key, channel, clientIpBytes, serverIpBytes)
+            } else {
                 diagnostics.warn("udp.protect", "protect() rechazó el socket UDP hacia ${describe(key)}")
                 channel.close()
-                return null
+                null
             }
-            channel.connect(InetSocketAddress(InetAddress.getByAddress(serverIpBytes), key.serverPort))
-
-            val session = Session(
-                key = key,
-                channel = channel,
-                clientIpBytes = clientIpBytes.copyOf(),
-                serverIpBytes = serverIpBytes.copyOf(),
-                idleTimeoutMs = policy.idleTimeoutFor(key.serverPort),
-                lastActiveTimeMs = clock.nowMs()
-            )
-            channel.register(selector, SelectionKey.OP_READ, session)
-            sessions[key] = session
-            session
         } catch (e: IOException) {
             diagnostics.warn("udp.connect", "No se pudo conectar el socket UDP a ${describe(key)}: ${e.message}", e)
             closeQuietly(channel)
             emitUnreachable(key, clientIpBytes, serverIpBytes, firstPayload, e)
             null
         }
+    }
+
+    private fun openChannel(key: SessionKey): DatagramChannel? =
+        try {
+            DatagramChannel.open()
+        } catch (e: IOException) {
+            diagnostics.warn("udp.open", "No se pudo crear el socket UDP hacia ${describe(key)}", e)
+            null
+        }
+
+    /** Conecta el canal ya protegido, crea la sesión y la registra en el selector. */
+    @Throws(IOException::class)
+    private fun connectSession(
+        key: SessionKey,
+        channel: DatagramChannel,
+        clientIpBytes: ByteArray,
+        serverIpBytes: ByteArray
+    ): Session {
+        channel.connect(InetSocketAddress(InetAddress.getByAddress(serverIpBytes), key.serverPort))
+        val session = Session(
+            key = key,
+            channel = channel,
+            clientIpBytes = clientIpBytes.copyOf(),
+            serverIpBytes = serverIpBytes.copyOf(),
+            idleTimeoutMs = policy.idleTimeoutFor(key.serverPort),
+            lastActiveTimeMs = clock.nowMs()
+        )
+        channel.register(selector, SelectionKey.OP_READ, session)
+        sessions[key] = session
+        return session
     }
 
     @Suppress("TooGenericExceptionCaught")
@@ -266,8 +279,8 @@ class UdpForwarder(
                         handleSelectedKeys()
                     }
                     cleanupIdleSessions()
-                } catch (e: ClosedSelectorException) {
-                    break
+                } catch (ignored: ClosedSelectorException) {
+                    break // close() cerró el selector: fin normal del bucle.
                 } catch (e: IOException) {
                     diagnostics.warn("udp.selector", "Error de I/O en el selector UDP", e)
                 } catch (e: RuntimeException) {
@@ -288,9 +301,8 @@ class UdpForwarder(
         while (selectedKeys.hasNext()) {
             val selKey = selectedKeys.next()
             selectedKeys.remove()
-            if (!selKey.isValid || !selKey.isReadable) continue
-            val session = selKey.attachment() as? Session ?: continue
-            handleIncomingData(session)
+            val session = selKey.takeIf { it.isValid && it.isReadable }?.attachment() as? Session
+            if (session != null) handleIncomingData(session)
         }
     }
 

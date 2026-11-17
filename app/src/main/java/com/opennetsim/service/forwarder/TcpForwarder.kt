@@ -369,8 +369,8 @@ class TcpForwarder(
                         handleSelectedKeys()
                     }
                     runTimers()
-                } catch (e: ClosedSelectorException) {
-                    break
+                } catch (ignored: ClosedSelectorException) {
+                    break // close() cerró el selector: fin normal del bucle.
                 } catch (e: IOException) {
                     diagnostics.warn("tcp.selector", "Error de I/O en el selector TCP", e)
                 } catch (e: RuntimeException) {
@@ -470,12 +470,12 @@ class TcpForwarder(
 
     private fun handleWrite(session: Session) {
         try {
-            while (true) {
-                val buffer = session.pendingWrites.firstOrNull() ?: break
-                val written = session.channel.write(buffer)
-                session.pendingWriteBytes -= written
-                if (buffer.hasRemaining()) break
+            var buffer = session.pendingWrites.firstOrNull()
+            while (buffer != null) {
+                session.pendingWriteBytes -= session.channel.write(buffer)
+                if (buffer.hasRemaining()) break // Socket lleno: se sigue con OP_WRITE.
                 session.pendingWrites.removeFirst()
+                buffer = session.pendingWrites.firstOrNull()
             }
         } catch (e: IOException) {
             session.ioFailure = e

@@ -118,11 +118,13 @@ Decisiones del usuario (17/11/2026), tomadas comparando con `tc netem`, Network 
 - [x] Release firmada verificada en dispositivo (túnel, cambios en caliente, configuración conservada, icono).
 - [x] CI en verde (incluye la compilación de release con R8, PR #10); cambio archivado.
 
-### Fase 13: Rendimiento y deuda (paso 5 de la hoja de ruta)
+### Fase 13: Rendimiento y deuda (paso 5 de la hoja de ruta, PR #11–#14)
 - [x] `clamp-outer-receive-window` (PR #11): cola sin leer de los sockets TCP exteriores acotada; archivado.
-- [x] `add-kover-coverage` (rama `chore/kover-coverage`): Kover 0.9.11, informe conjunto de `:app` y `:core` sin el código que solo corre con Android o Compose. Medido: 87,6 % de líneas (66,3 % de ramas); `:core`, 86,7 %. Mínimo del 85 % de líneas en la CI.
-- [x] `add-packet-microbenchmark` (rama `perf/packet-microbenchmark`): módulo `:benchmark` (kotlinx-benchmark/JMH) del camino de cada paquete. Medido en la JVM con un segmento de 1460 B: subida ~0,65 µs, bajada ~1,35 µs (~1 % de un núcleo a 100 Mbps) y ~2,2 veces el tamaño del paquete en memoria reservada por las copias. Conclusión: no hace falta optimizar a las velocidades simuladas, pero el usuario pidió aplicar las mejoras.
-- [x] `optimize-packet-path` (misma rama): payload IP como vista sin copia, serialización IP + transporte en un único array (`toIpBytes`) y checksum con `ByteBuffer.getLong`. Medido antes/después (JVM, segmento de 1460 B): subida 434 → 224 ns, bajada 861 → 224 ns, checksum 362 → 40 ns, memoria por paquete −50 %. Bytes idénticos a los de antes (`PacketCodecEquivalenceTest`). CI en verde (PR #13) y verificado en dispositivo por el usuario.
+- [x] `add-kover-coverage` (PR #12): Kover 0.9.11, informe conjunto de `:app` y `:core` sin el código que solo corre con Android o Compose. Medido: 87,6 % de líneas (66,3 % de ramas); `:core`, 86,7 %. Mínimo del 85 % de líneas en la CI.
+- [x] `add-packet-microbenchmark` (PR #13): módulo `:benchmark` (kotlinx-benchmark/JMH) del camino de cada paquete. Medido en la JVM con un segmento de 1460 B: subida ~0,65 µs, bajada ~1,35 µs (~1 % de un núcleo a 100 Mbps) y ~2,2 veces el tamaño del paquete en memoria reservada por las copias. Conclusión: no hace falta optimizar a las velocidades simuladas, pero el usuario pidió aplicar las mejoras.
+- [x] `optimize-packet-path` (PR #13): payload IP como vista sin copia, serialización IP + transporte en un único array (`toIpBytes`) y checksum con `ByteBuffer.getLong`. Medido antes/después (JVM, segmento de 1460 B): subida 434 → 224 ns, bajada 861 → 224 ns, checksum 362 → 40 ns, memoria por paquete −50 %. Bytes idénticos a los de antes (`PacketCodecEquivalenceTest`). CI en verde (PR #13) y verificado en dispositivo por el usuario.
+- [x] `reduce-detekt-baselines` (PR #14): baseline de `:core` eliminada (106 entradas al empezar la puerta de calidad, 0 ahora) y la de `:app` de 32 a 18, todas de `Color.kt` y `ThrottleDashboardScreen.kt` (paso 6). Parsers con constantes con nombre y validación en helpers sin empaquetado. Memoria por paquete igual; +2 ns en el parseo TCP.
+- [x] CI en verde en los cuatro PR, verificación en dispositivo de los que cambian los forwarders (usuario, 17/11/2026) y los cinco cambios del paso 5 archivados en `openspec/changes/archive/2026-11-17-*`.
 
 ---
 
@@ -131,7 +133,7 @@ Decisiones del usuario (17/11/2026), tomadas comparando con `tc netem`, Network 
 2. ~~Módulo `:core` y version catalog~~ (Fase 10).
 3. ~~Actualizar AGP, Kotlin y Gradle~~ (Fase 11). Queda un aviso de Gradle 10 que viene del plugin de detekt 1.23.8: se resuelve con detekt 2.0 cuando sea estable. Pendiente aparte: Compose BOM, AndroidX y corrutinas.
 4. ~~Preparar la release~~ (Fase 12).
-5. Rendimiento y deuda (Fase 13): ~~microbenchmark del camino de cada paquete antes de optimizar~~, reducir las baselines de detekt y ~~medir cobertura con Kover~~.
+5. ~~Rendimiento y deuda~~ (Fase 13): microbenchmark y optimización del camino de cada paquete, baselines de detekt y cobertura con Kover.
    - Test de velocidad de Google cancelado y repetido enseguida (observado por el usuario el 17/11/2026 con la release): mide menos de lo configurado; si se deja terminar, el siguiente es normal. Causa medida: los sockets TCP exteriores acumulaban varios MB sin leer en el kernel (hasta 6,9 MB por conexión), que se seguían entregando por el límite. Resuelto en el cambio `clamp-outer-receive-window` (PR #11, archivado): `SO_RCVBUF` y `TCP_WINDOW_CLAMP` proporcionales a la red simulada, ajustables en caliente. Verificado por el usuario con el test oficial de M-Lab recargado 5–6 veces a mitad de prueba, sin pérdida; el de Google no se pudo repetir (IP bloqueada temporalmente).
 6. Nueva interfaz (pedido por el usuario el 17/11/2026):
    - Sustituir los sliders por campos para escribir el valor exacto (ancho de banda en kbps/Mbps, como otras apps; también latencia, jitter y porcentajes).
@@ -141,7 +143,7 @@ Decisiones del usuario (17/11/2026), tomadas comparando con `tc netem`, Network 
 ---
 
 ## Punto de Retorno (Checkpoint)
-- **Últimos archivos modificados:** `IpPacket`, `Ipv6Packet`, `TcpPacket`, `UdpPacket`, `ChecksumUtils`, `PacketBytes`, `IpFraming`, los tres forwarders, `PacketCodecEquivalenceTest`, `benchmark/` y `openspec/changes/{add-packet-microbenchmark,optimize-packet-path}` (rama `perf/packet-microbenchmark`, apilada sobre `chore/kover-coverage`).
-- **Estado General:** Fases 1–11 en `develop` y `main`; Fase 12 en `develop` (PR #10). Cambio `clamp-outer-receive-window` en `develop` (PR #11) y archivado. Cambio `add-kover-coverage` con CI en verde (PR #12), pendiente de fusionar. Cambio `add-packet-microbenchmark` verificado en local.
+- **Últimos archivos modificados:** parsers de `core/packet`, forwarders, `benchmark/`, configuración de Kover y detekt, y los cambios archivados del paso 5.
+- **Estado General:** Fases 1–11 en `develop` y `main`; Fases 12 y 13 en `develop` (PR #10–#14), pendientes de llevar a `main`.
 - **Artefacto de Distribución:** APK de depuración en `app/build/outputs/apk/debug/app-debug.apk`; release firmada en `app/build/outputs/apk/release/app-release.apk` (keystore del usuario, fuera del repositorio).
-- **Siguiente acción inmediata:** fusionar los PR #12 y #13; baselines de detekt en `refactor/detekt-baselines` (repetir `allocationBenchmark` tras el refactor de los parsers).
+- **Siguiente acción inmediata:** paso 6 de la hoja de ruta (nueva interfaz); antes, confirmar con el usuario la paleta oficial. Cuando el usuario lo pida, llevar `develop` a `main`.
