@@ -67,7 +67,24 @@ OpenNetSim/
 
 # Build debug APK
 ./gradlew assembleDebug
+
+# Build release APK (R8 + resource shrinking; unsigned unless signing is configured)
+./gradlew :app:assembleRelease
 ```
+
+### Release Signing
+The release keystore and its passwords never go in the repository. Add these Gradle properties to
+`~/.gradle/gradle.properties` (or pass them as `ORG_GRADLE_PROJECT_<name>` environment variables in CI):
+
+```properties
+openNetSimReleaseStoreFile=/absolute/path/to/opennetsim-release.jks
+openNetSimReleaseStorePassword=...
+openNetSimReleaseKeyAlias=opennetsim
+openNetSimReleaseKeyPassword=...
+```
+
+Without them, `assembleRelease` produces `app-release-unsigned.apk`. Keep a backup of the keystore: an
+installed app can only be updated with an APK signed by the same key.
 
 ---
 

@@ -4,6 +4,10 @@ plugins {
     alias(libs.plugins.detekt)
 }
 
+// Firma de release: se lee de propiedades de Gradle fuera del repositorio (~/.gradle/gradle.properties,
+// o variables ORG_GRADLE_PROJECT_<nombre> en CI). Sin ellas, assembleRelease genera un APK sin firmar.
+val releaseStoreFile = providers.gradleProperty("openNetSimReleaseStoreFile").orNull
+
 android {
     namespace = "com.opennetsim"
     compileSdk = 35
@@ -21,9 +25,22 @@ android {
         }
     }
 
+    signingConfigs {
+        if (releaseStoreFile != null) {
+            create("release") {
+                storeFile = file(releaseStoreFile)
+                storePassword = providers.gradleProperty("openNetSimReleaseStorePassword").get()
+                keyAlias = providers.gradleProperty("openNetSimReleaseKeyAlias").get()
+                keyPassword = providers.gradleProperty("openNetSimReleaseKeyPassword").get()
+            }
+        }
+    }
+
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            signingConfig = signingConfigs.findByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

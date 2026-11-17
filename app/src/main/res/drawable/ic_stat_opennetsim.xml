@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Icono de la notificación: silueta blanca del logo (Android solo usa el canal alfa). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+
+    <!-- Marco superior e inferior -->
+    <path
+        android:strokeWidth="9"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M 16,40 L 16,30 A 14,14 0 0,1 30,16 L 70,16 A 14,14 0 0,1 84,30 L 84,40" />
+    <path
+        android:strokeWidth="9"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M 84,60 L 84,70 A 14,14 0 0,1 70,84 L 30,84 A 14,14 0 0,1 16,70 L 16,60" />
+
+    <!-- Pulso -->
+    <path
+        android:strokeWidth="9"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M 10,50 L 28,54 L 41,25 L 54,77 L 66,33 L 75,50 L 90,50" />
+</vector>

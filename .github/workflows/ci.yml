@@ -41,6 +41,9 @@ jobs:
       - name: Tests unitarios
         run: ./gradlew :core:test :app:testDebugUnitTest --continue --console=plain
 
+      - name: Release con R8 (sin firmar)
+        run: ./gradlew :app:assembleRelease --console=plain
+
       - name: Informes
         if: always()
         uses: actions/upload-artifact@v4
