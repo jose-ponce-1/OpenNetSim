@@ -130,11 +130,9 @@ subida los libera y sin ejecución concurrente sobre el estado de esa sesión.
 - **THEN** se procesan uno tras otro y el estado de secuencia de la sesión es coherente con ambos
 
 ### Requirement: Recepción del socket exterior sin tope artificial
-El búfer de recepción del socket exterior SHALL ser suficiente para el caudal de bajada configurado
-con la latencia real del camino, de modo que no sea el factor limitante del caudal. A la vez, los
-datos pendientes de cada socket exterior (sin leer por el túnel o en vuelo desde el servidor) SHALL
-estar acotados en proporción a la red simulada (caudal de bajada × (latencia + jitter + ventana de cola
-del motor)), para que el servidor no dé por entregados más datos de los que esa red admitiría; el tope SHALL reajustarse también en las
+El socket exterior SHALL NOT limitar el caudal de bajada configurado con la latencia real del camino.
+Los datos pendientes de cada socket exterior (sin leer o en vuelo desde el servidor) SHALL quedar
+acotados a caudal de bajada × (latencia + jitter + ventana de cola del motor), también en las
 conexiones abiertas cuando cambia la configuración.
 
 #### Scenario: Perfil de 5 Mbps con servidor a 80 ms
