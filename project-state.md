@@ -103,7 +103,7 @@ Decisiones del usuario (17/11/2026), tomadas comparando con `tc netem`, Network 
 - [x] Version catalog `gradle/libs.versions.toml` (mismas versiones); detekt configurado en el script raíz con una baseline por módulo (127 entradas, antes 142, ninguna nueva).
 - [x] 175 tests (115 en `:core`, 60 en `:app`, 1 omitido en Windows), `detekt`, `lintDebug` y `assembleDebug` en verde.
 - [x] CI de GitHub Actions en verde con los dos módulos (PR #6); cambio archivado.
-- [ ] La CI destapó una carrera en `UdpForwarder.close()` y `TcpForwarder.close()` (cerraban el selector desde otro hilo: NullPointerException del JDK en `AbstractSelector.deregister`). Ahora, como en `IcmpForwarder`, se libera todo en el hilo del bucle; test de estrés añadido. Pendiente de verificar en dispositivo.
+- [x] La CI destapó una carrera en `UdpForwarder.close()` y `TcpForwarder.close()` (cerraban el selector desde otro hilo: NullPointerException del JDK en `AbstractSelector.deregister`). Ahora, como en `IcmpForwarder`, se libera todo en el hilo del bucle; test de estrés añadido. Verificado en dispositivo.
 
 ---
 
@@ -122,6 +122,6 @@ Decisiones del usuario (17/11/2026), tomadas comparando con `tc netem`, Network 
 
 ## Punto de Retorno (Checkpoint)
 - **Últimos archivos modificados:** `core/` (módulo nuevo con `core.*` y `model.*`), `gradle/libs.versions.toml`, `build.gradle.kts`, `app/build.gradle.kts`, `settings.gradle.kts`, `config/detekt/`, `.github/workflows/ci.yml` y documentación (Fase 10, rama `refactor/core-module`, PR #6).
-- **Estado General:** Fases 1–9 cerradas y fusionadas en `develop`; Fase 10 verificada (local y CI), pendiente de verificar en dispositivo el arreglo del cierre de los forwarders y de fusionar (PR #6).
+- **Estado General:** Fases 1–9 cerradas y fusionadas en `develop`; Fase 10 verificada (local, CI y dispositivo), pendiente de fusionar (PR #6).
 - **Artefacto de Distribución:** APK de depuración en `app/build/outputs/apk/debug/app-debug.apk`.
 - **Siguiente acción inmediata:** fusionar el PR #6; después, el paso 3 de la hoja de ruta (actualizar AGP/Kotlin/Gradle).
