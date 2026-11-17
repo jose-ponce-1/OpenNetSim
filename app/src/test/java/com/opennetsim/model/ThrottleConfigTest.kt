@@ -15,7 +15,8 @@ class ThrottleConfigTest {
         assertEquals(128, slow3gConfig.upKbps)
         assertEquals(200, slow3gConfig.latencyMs)
         assertEquals(40, slow3gConfig.jitterMs)
-        assertEquals(2.0f, slow3gConfig.packetLossPercent, 0.001f)
+        assertEquals(2.0f, slow3gConfig.upLossPercent, 0.001f)
+        assertEquals(2.0f, slow3gConfig.downLossPercent, 0.001f)
         assertTrue(slow3gConfig.matchesPreset(ThrottlePreset.SLOW_3G))
         assertFalse(slow3gConfig.matchesPreset(ThrottlePreset.EDGE_2G))
     }
@@ -27,7 +28,8 @@ class ThrottleConfigTest {
             upKbps = 111,
             latencyMs = 50,
             jitterMs = 10,
-            packetLossPercent = 1.0f
+            upLossPercent = 1.0f,
+            downLossPercent = 1.0f
         )
         assertFalse(config.matchesPreset(ThrottlePreset.SLOW_3G))
         assertFalse(config.matchesPreset(ThrottlePreset.CUSTOM))
@@ -51,5 +53,21 @@ class ThrottleConfigTest {
         assertEquals(0f, ThrottleConfig.roundTripLossPercent(0f), 0.0001f)
         assertEquals(75f, ThrottleConfig.roundTripLossPercent(50f), 0.01f)
         assertEquals(100f, ThrottleConfig.roundTripLossPercent(150f), 0.01f)
+    }
+
+    @Test
+    fun roundTripLossCombinesBothDirections() {
+        val config = ThrottleConfig(upLossPercent = 10f, downLossPercent = 0f)
+        assertEquals("Solo pierde la subida", 10f, config.roundTripLossPercent, 0.01f)
+        assertEquals(1f - 0.9f * 0.8f, ThrottleConfig.roundTripLossPercent(10f, 20f) / 100f, 0.0001f)
+    }
+
+    @Test
+    fun burstsReorderingOrAsymmetricLossMakeTheConfigCustom() {
+        val slow3g = ThrottlePreset.fromPreset(ThrottlePreset.SLOW_3G)
+        assertTrue(slow3g.matchesPreset(ThrottlePreset.SLOW_3G))
+        assertFalse(slow3g.copy(lossBurstLength = 3).matchesPreset(ThrottlePreset.SLOW_3G))
+        assertFalse(slow3g.copy(reorderPercent = 5f).matchesPreset(ThrottlePreset.SLOW_3G))
+        assertFalse(slow3g.copy(downLossPercent = 9f).matchesPreset(ThrottlePreset.SLOW_3G))
     }
 }

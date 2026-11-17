@@ -15,7 +15,8 @@ import com.opennetsim.model.TrafficCounters
 import com.opennetsim.service.diag.error
 import com.opennetsim.service.diag.warn
 import com.opennetsim.service.forwarder.ForwarderEnvironment
-import com.opennetsim.service.forwarder.IcmpResponder
+import com.opennetsim.service.forwarder.IcmpEchoTransport
+import com.opennetsim.service.forwarder.IcmpForwarder
 import com.opennetsim.service.forwarder.TcpForwarder
 import com.opennetsim.service.forwarder.UdpForwarder
 import kotlinx.coroutines.CancellationException
@@ -36,6 +37,9 @@ import java.util.concurrent.atomic.AtomicBoolean
 /**
  * Pipeline de un túnel activo: TUN → motor de subida → forwarders → Internet → motor de bajada → TUN.
  *
+ * El ping también va a la red real ([IcmpForwarder] sobre [icmpTransport]): su RTT es el real más la
+ * degradación configurada.
+ *
  * No depende de Android: el servicio le entrega un [TunDevice] ya establecido y un
  * [ForwarderEnvironment] (protector de sockets, ámbito, reloj y diagnóstico), y recibe los fallos
  * no recuperables y la telemetría por [Listener]. Así se prueba en la JVM con un TUN en memoria.
@@ -52,7 +56,8 @@ class TunnelPipeline(
     initialConfig: ThrottleConfig,
     environment: ForwarderEnvironment,
     private val listener: Listener,
-    private val mtu: Int = DEFAULT_MTU
+    private val mtu: Int = DEFAULT_MTU,
+    icmpTransport: IcmpEchoTransport = IcmpEchoTransport.UNAVAILABLE
 ) {
     /** Avisos del pipeline al servicio. Se invocan desde hilos de I/O. */
     interface Listener {
@@ -90,7 +95,11 @@ class TunnelPipeline(
     private val downlinkWake = Channel<Unit>(Channel.CONFLATED)
 
     private val toDownlink: (ByteArray) -> Unit = { packet -> enqueue(packet, engine.downlinkEngine, downlinkWake) }
-    private val icmpResponder = IcmpResponder(onInboundPacket = toDownlink)
+    private val icmpForwarder = IcmpForwarder(
+        environment = forwarderEnvironment,
+        transport = icmpTransport,
+        onInboundPacket = toDownlink
+    )
     private val udpForwarder = UdpForwarder(environment = forwarderEnvironment, onInboundPacket = toDownlink)
     private val tcpForwarder = TcpForwarder(
         environment = forwarderEnvironment,
@@ -123,6 +132,7 @@ class TunnelPipeline(
         job.cancel()
         udpForwarder.close()
         tcpForwarder.close()
+        icmpForwarder.close()
         synchronized(tunWriteLock) { tun.close() }
         engine.clear()
     }
@@ -227,7 +237,7 @@ class TunnelPipeline(
         when (ipPacket.protocol) {
             IpPacket.PROTOCOL_UDP -> udpForwarder.processOutbound(ipPacket)
             IpPacket.PROTOCOL_TCP -> tcpForwarder.processOutbound(ipPacket)
-            IpPacket.PROTOCOL_ICMP -> icmpResponder.processOutboundIpv4(ipPacket)
+            IpPacket.PROTOCOL_ICMP -> icmpForwarder.processOutboundIpv4(ipPacket)
         }
     }
 
@@ -235,7 +245,7 @@ class TunnelPipeline(
         when (ipv6Packet.nextHeader) {
             Ipv6Packet.PROTOCOL_UDP -> udpForwarder.processOutboundIpv6(ipv6Packet)
             Ipv6Packet.PROTOCOL_TCP -> tcpForwarder.processOutboundIpv6(ipv6Packet)
-            Ipv6Packet.PROTOCOL_ICMPV6 -> icmpResponder.processOutboundIpv6(ipv6Packet)
+            Ipv6Packet.PROTOCOL_ICMPV6 -> icmpForwarder.processOutboundIpv6(ipv6Packet)
         }
     }
 

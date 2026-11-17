@@ -5,6 +5,7 @@ import com.opennetsim.core.packet.IpPacket
 import com.opennetsim.core.packet.UdpPacket
 import com.opennetsim.model.NetworkTelemetry
 import com.opennetsim.model.ThrottleConfig
+import com.opennetsim.service.forwarder.FakeIcmpEchoTransport
 import com.opennetsim.service.forwarder.ForwarderEnvironment
 import com.opennetsim.service.forwarder.VpnSocketProtector
 import kotlinx.coroutines.CoroutineScope
@@ -75,6 +76,7 @@ class TunnelPipelineTest {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val tun = FakeTunDevice()
     private val listener = RecordingListener()
+    private val icmpTransport = FakeIcmpEchoTransport()
     private lateinit var echoServer: DatagramSocket
     private lateinit var pipeline: TunnelPipeline
 
@@ -92,7 +94,8 @@ class TunnelPipelineTest {
         upKbps = 10_000,
         latencyMs = 200,
         jitterMs = 0,
-        packetLossPercent = 0f
+        upLossPercent = 0f,
+        downLossPercent = 0f
     )
 
     @Before
@@ -117,7 +120,8 @@ class TunnelPipelineTest {
             tun = tun,
             initialConfig = config,
             environment = ForwarderEnvironment(socketProtector = protector, coroutineScope = scope),
-            listener = listener
+            listener = listener,
+            icmpTransport = icmpTransport
         )
         pipeline.start()
     }
@@ -148,8 +152,7 @@ class TunnelPipelineTest {
         assertTrue("RTT de $elapsedMs ms: debe incluir los 200 ms configurados", elapsedMs >= 190L)
     }
 
-    @Test
-    fun pingIsAnsweredLocallyWithConfiguredLatency() {
+    private fun pingTo(destination: ByteArray): ByteArray {
         val echo = IcmpPacket(
             type = IcmpPacket.TYPE_ECHO_REQUEST_V4,
             code = 0,
@@ -158,25 +161,38 @@ class TunnelPipelineTest {
             payload = ByteArray(16)
         )
         val icmpBytes = echo.toByteArray(isIpv6 = false)
-        val request = IpPacket(
+        return IpPacket(
             version = 4,
             ihl = 5,
             totalLength = 20 + icmpBytes.size,
             protocol = IpPacket.PROTOCOL_ICMP,
             sourceIp = clientIp,
-            destinationIp = byteArrayOf(8, 8, 8, 8),
+            destinationIp = destination,
             payload = icmpBytes
         ).toByteArray()
+    }
 
+    @Test
+    fun pingGoesToTheRealNetworkWithConfiguredLatencyAdded() {
         val sentAt = System.nanoTime()
-        tun.fromApps.add(request)
+        tun.fromApps.add(pingTo(byteArrayOf(8, 8, 8, 8)))
         val reply = tun.toApps.poll(3, TimeUnit.SECONDS)
         val elapsedMs = (System.nanoTime() - sentAt) / 1_000_000L
 
         assertNotNull(reply)
         val icmp = IcmpPacket.parse(IpPacket.parse(reply!!)!!.payload)!!
         assertEquals(IcmpPacket.TYPE_ECHO_REPLY_V4, icmp.type)
+        assertEquals("Respuesta con el identificador del ping de la app", 7, icmp.identifier)
+        assertEquals("El ping sale por el socket de ping del sistema", 1, icmpTransport.sent.size)
         assertTrue("RTT de $elapsedMs ms", elapsedMs >= 190L)
+    }
+
+    @Test
+    fun pingToUnreachableHostGetsNoReply() {
+        icmpTransport.unreachable += InetAddress.getByAddress(byteArrayOf(10, 99, 99, 99))
+        tun.fromApps.add(pingTo(byteArrayOf(10, 99, 99, 99)))
+
+        assertEquals(null, tun.toApps.poll(600, TimeUnit.MILLISECONDS))
     }
 
     @Test

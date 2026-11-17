@@ -11,8 +11,9 @@ import com.opennetsim.model.ThrottleConfig
  * La latencia y jitter se distribuyen equitativamente (RTT / 2 en subida y RTT / 2 en bajada)
  * de modo que el retardo acumulado percibido en peticiones y pings refleje el valor configurado.
  *
- * La pérdida se aplica de forma independiente en cada dirección: un intercambio de ida y vuelta
- * (p. ej. un ping) se pierde con probabilidad `1 − (1 − p)²` (ver [ThrottleConfig.roundTripLossPercent]).
+ * La pérdida se configura y aplica por separado en cada dirección: un intercambio de ida y vuelta
+ * (p. ej. un ping) se pierde con probabilidad `1 − (1 − p↑)(1 − p↓)` (ver
+ * [ThrottleConfig.roundTripLossPercent]).
  */
 class BidirectionalThrottlingEngine(
     val uplinkEngine: ThrottlingEngine,
@@ -78,22 +79,8 @@ class BidirectionalThrottlingEngine(
      */
     @Synchronized
     fun updateConfig(config: ThrottleConfig) {
-        val halfLatency = config.latencyMs / 2
-        val halfJitter = config.jitterMs / 2
-
-        uplinkEngine.updateParameters(
-            rateKbps = config.upKbps,
-            latencyMs = halfLatency,
-            jitterMs = halfJitter,
-            packetLossPercent = config.packetLossPercent
-        )
-
-        downlinkEngine.updateParameters(
-            rateKbps = config.downKbps,
-            latencyMs = halfLatency,
-            jitterMs = halfJitter,
-            packetLossPercent = config.packetLossPercent
-        )
+        uplinkEngine.updateParameters(config.uplinkParams(halfLatency = true))
+        downlinkEngine.updateParameters(config.downlinkParams(halfLatency = true))
     }
 
     /**
@@ -131,24 +118,8 @@ class BidirectionalThrottlingEngine(
             config: ThrottleConfig,
             clock: MonotonicClock = MonotonicClock.SYSTEM
         ): BidirectionalThrottlingEngine {
-            val halfLatency = config.latencyMs / 2
-            val halfJitter = config.jitterMs / 2
-
-            val uplink = ThrottlingEngine.createPipeline(
-                rateKbps = config.upKbps,
-                latencyMs = halfLatency,
-                jitterMs = halfJitter,
-                packetLossPercent = config.packetLossPercent,
-                clock = clock
-            )
-
-            val downlink = ThrottlingEngine.createPipeline(
-                rateKbps = config.downKbps,
-                latencyMs = halfLatency,
-                jitterMs = halfJitter,
-                packetLossPercent = config.packetLossPercent,
-                clock = clock
-            )
+            val uplink = ThrottlingEngine.createPipeline(config.uplinkParams(halfLatency = true), clock)
+            val downlink = ThrottlingEngine.createPipeline(config.downlinkParams(halfLatency = true), clock)
 
             return BidirectionalThrottlingEngine(
                 uplinkEngine = uplink,

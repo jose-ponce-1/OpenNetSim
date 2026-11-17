@@ -2,6 +2,8 @@ package com.opennetsim.model
 
 /**
  * Perfiles preconfigurados para simular diferentes escenarios de degradación de red.
+ *
+ * [packetLossPercent] se aplica por igual a la subida y a la bajada, sin ráfagas ni reordenación.
  */
 enum class ThrottlePreset(
     val displayName: String,
@@ -65,7 +67,8 @@ enum class ThrottlePreset(
                 upKbps = preset.upKbps,
                 latencyMs = preset.latencyMs,
                 jitterMs = preset.jitterMs,
-                packetLossPercent = preset.packetLossPercent,
+                upLossPercent = preset.packetLossPercent,
+                downLossPercent = preset.packetLossPercent,
                 preset = preset
             )
         }

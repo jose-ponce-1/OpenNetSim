@@ -48,20 +48,26 @@ data class DelayedPacket(
  * Los paquetes son ordenados por su tiempo de liberación programado (scheduledReleaseTimeMs).
  *
  * @param baseLatencyMs Retardo base en milisegundos.
- * @param jitterMs Desviación máxima simétrica (+/- ms).
+ * @param jitterMs Desviación máxima simétrica (+/- ms), aplicada con un [JitterProcess] continuo.
  * @param clock Reloj monotónico compartido con el resto del motor.
  * @param jitterRandom Generador de número aleatorio en un rango cerrado [min, max].
  */
 class LatencyQueue(
-    var baseLatencyMs: Long = 0L,
-    var jitterMs: Long = 0L,
+    baseLatencyMs: Long = 0L,
+    jitterMs: Long = 0L,
     private val clock: MonotonicClock = MonotonicClock.SYSTEM,
-    private val jitterRandom: (minInclusive: Long, maxInclusive: Long) -> Long = { min, max ->
+    jitterRandom: (minInclusive: Long, maxInclusive: Long) -> Long = { min, max ->
         if (min == max) min else kotlin.random.Random.nextLong(min, max + 1)
     }
 ) {
     private val queue = PriorityQueue<DelayedPacket>()
     private var sequenceCounter = 0L
+    private val jitter = JitterProcess(jitterRandom).also { it.reset(max(0L, jitterMs)) }
+
+    var baseLatencyMs: Long = max(0L, baseLatencyMs)
+
+    var jitterMs: Long = max(0L, jitterMs)
+        private set
 
     val size: Int
         @Synchronized get() = queue.size
@@ -70,16 +76,11 @@ class LatencyQueue(
         @Synchronized get() = queue.isEmpty()
 
     /**
-     * Calcula el retardo de latencia sumando la base y el jitter aleatorio.
+     * Retardo de un paquete que entra en [nowMs]: la base más el desplazamiento del jitter en ese
+     * instante.
      */
-    fun calculateDelayMs(): Long {
-        val jitterOffset = if (jitterMs > 0L) {
-            jitterRandom(-jitterMs, jitterMs)
-        } else {
-            0L
-        }
-        return max(0L, baseLatencyMs + jitterOffset)
-    }
+    @Synchronized
+    fun calculateDelayMs(nowMs: Long = clock.nowMs()): Long = max(0L, baseLatencyMs + jitter.offsetAt(nowMs))
 
     /**
      * Encola un paquete con una marca de tiempo programada de liberación explícita.
@@ -109,7 +110,7 @@ class LatencyQueue(
      */
     @Synchronized
     fun enqueue(data: ByteArray, currentTimeMs: Long = clock.nowMs()): DelayedPacket {
-        val scheduledTime = currentTimeMs + calculateDelayMs()
+        val scheduledTime = currentTimeMs + calculateDelayMs(currentTimeMs)
         return enqueueWithScheduledTime(
             data = data,
             scheduledReleaseTimeMs = scheduledTime,
@@ -189,6 +190,8 @@ class LatencyQueue(
     @Synchronized
     fun updateLatencyAndJitter(newBaseLatencyMs: Long, newJitterMs: Long) {
         this.baseLatencyMs = max(0L, newBaseLatencyMs)
-        this.jitterMs = max(0L, newJitterMs)
+        val amplitude = max(0L, newJitterMs)
+        if (amplitude != jitterMs) jitter.reset(amplitude)
+        this.jitterMs = amplitude
     }
 }

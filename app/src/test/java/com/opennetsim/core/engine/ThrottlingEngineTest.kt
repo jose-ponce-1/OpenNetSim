@@ -153,7 +153,8 @@ class ThrottlingEngineTest {
             upKbps = 128,
             latencyMs = 250,
             jitterMs = 50,
-            packetLossPercent = 10.0f
+            upLossPercent = 10.0f,
+            downLossPercent = 10.0f
         )
 
         engine.updateConfig(newConfig)
@@ -403,5 +404,82 @@ class ThrottlingEngineTest {
         val clock = MonotonicClock.ofMillis { 1_234L }
         assertEquals(1_234L, clock.nowMs())
         assertEquals(1_234L * MonotonicClock.NANOS_PER_MS, clock.nowNanos())
+    }
+
+    @Test
+    fun testJitterUnderLoadKeepsOrderAndIsNotBiasedUpwards() {
+        // 200 ms ± 50 ms con un paquete por ms durante 5 s y ancho de banda holgado.
+        val engine = ThrottlingEngine.createPipeline(
+            ImpairmentParams(rateKbps = 1_000_000, latencyMs = 200, jitterMs = 50),
+            MonotonicClock.ofMillis { simulatedTimeMs }
+        )
+        val start = simulatedTimeMs
+        val arrivals = HashMap<Int, Long>()
+        val released = mutableListOf<Pair<Int, Long>>()
+        for (tick in 0 until 6_000) {
+            if (tick < 5_000) {
+                val packet = java.nio.ByteBuffer.allocate(100).putInt(tick).array()
+                arrivals[tick] = simulatedTimeMs
+                engine.processIncoming(packet, simulatedTimeMs, allowImmediateRelease = false)
+            }
+            engine.drainReady(simulatedTimeMs).forEach { data ->
+                released += java.nio.ByteBuffer.wrap(data).int to simulatedTimeMs
+            }
+            simulatedTimeMs += 1L
+        }
+
+        assertEquals(5_000, released.size)
+        assertEquals("El jitter no reordena", (0 until 5_000).toList(), released.map { it.first })
+        val delays = released.map { (id, departure) -> departure - arrivals.getValue(id) }
+        assertTrue("Retardos dentro de 200 ± 50 ms", delays.all { it in 150L..251L })
+        // Con un valor aleatorio independiente por paquete, el FIFO llevaba la media a ~225 ms.
+        assertEquals("Media sin sesgo hacia arriba (hallazgo 8)", 200.0, delays.average(), 10.0)
+        assertTrue(start > 0)
+    }
+
+    @Test
+    fun testReorderedPacketOvertakesQueuedPackets() {
+        val decisions = ArrayDeque(listOf(0.9, 0.1)) // Primero no se reordena; el segundo sí.
+        val engine = ThrottlingEngine(
+            bandwidthLimiter = TokenBucketLimiter(
+                bytesPerSecond = 10_000_000L,
+                clock = MonotonicClock.ofMillis { simulatedTimeMs }
+            ),
+            latencyQueue = LatencyQueue(baseLatencyMs = 100L, clock = MonotonicClock.ofMillis { simulatedTimeMs }),
+            packetLossSimulator = PacketLossSimulator(),
+            clock = MonotonicClock.ofMillis { simulatedTimeMs },
+            reorderRandom = { decisions.removeFirst() }
+        ).apply { reorderProbability = 0.5 }
+
+        val first = byteArrayOf(1)
+        val second = byteArrayOf(2)
+        engine.processIncoming(first, simulatedTimeMs, allowImmediateRelease = false)
+        engine.processIncoming(second, simulatedTimeMs, allowImmediateRelease = false)
+
+        val immediately = engine.drainReady(simulatedTimeMs)
+        assertEquals(
+            "El paquete reordenado sale sin latencia, por delante",
+            listOf(2),
+            immediately.map { it[0].toInt() }
+        )
+        simulatedTimeMs += 100L
+        assertEquals(listOf(1), engine.drainReady(simulatedTimeMs).map { it[0].toInt() })
+    }
+
+    @Test
+    fun testReorderPercentIsAppliedFromParams() {
+        val engine = ThrottlingEngine.createPipeline(ImpairmentParams(rateKbps = 1000, reorderPercent = 12.5f))
+        assertEquals(0.125, engine.reorderProbability, 1e-9)
+        engine.updateParameters(ImpairmentParams(rateKbps = 1000, reorderPercent = 0f))
+        assertEquals(0.0, engine.reorderProbability, 1e-9)
+    }
+
+    @Test
+    fun testDirectionalLossAndBurstComeFromConfig() {
+        val config = ThrottleConfig(upLossPercent = 3f, downLossPercent = 12f, lossBurstLength = 4)
+        val engine = BidirectionalThrottlingEngine.fromConfig(config)
+        assertEquals(0.03, engine.uplinkEngine.packetLossSimulator.lossProbability, 1e-6)
+        assertEquals(0.12, engine.downlinkEngine.packetLossSimulator.lossProbability, 1e-6)
+        assertEquals(4, engine.downlinkEngine.packetLossSimulator.burstLength)
     }
 }
