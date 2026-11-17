@@ -165,4 +165,23 @@ class UdpForwarderTest {
         assertEquals("hola", String(udp.payload))
         assertEquals(42000, udp.destinationPort)
     }
+
+    @Test
+    fun closeWhileSelectorThreadRegistersSessionsDoesNotThrow() {
+        // close() cerraba el selector desde el hilo llamante mientras el del selector registraba canales:
+        // NullPointerException del JDK en AbstractSelector.deregister.
+        repeat(CLOSE_RACE_ROUNDS) { round ->
+            val racing = UdpForwarder(
+                environment = ForwarderEnvironment(socketProtector = protector, coroutineScope = scope),
+                onInboundPacket = {}
+            )
+            repeat(SESSIONS_PER_ROUND) { racing.processOutbound(outboundDatagram(45000 + it, "r$round".toByteArray())) }
+            racing.close()
+        }
+    }
+
+    private companion object {
+        const val CLOSE_RACE_ROUNDS = 500
+        const val SESSIONS_PER_ROUND = 10
+    }
 }
