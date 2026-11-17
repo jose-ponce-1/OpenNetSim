@@ -1,10 +1,13 @@
 # Versiones del proyecto. Cambiar una versión mayor de AGP, Kotlin, Gradle o Compose exige comprobar
 # antes la matriz de compatibilidad de AGP (ver openspec/config.yaml).
+# AGP 9.3.3 + Kotlin 2.4.21 + Gradle 9.7.1: KGP 2.4.21 está probado hasta AGP 9.3.1 y Gradle 9.7.0, y
+# AGP 9.3 pide Gradle 9.5.0 o superior (matrices de noviembre de 2026). :app usa el Kotlin integrado
+# de AGP 9; los plugins de Kotlin declarados en el script raíz fijan su versión.
 
 [versions]
-agp = "8.7.3"
-kotlin = "2.0.21"
-detekt = "1.23.7"
+agp = "9.3.3"
+kotlin = "2.4.21"
+detekt = "1.23.8"
 composeRulesDetekt = "0.4.22"
 composeBom = "2024.10.01"
 coreKtx = "1.15.0"
@@ -38,7 +41,6 @@ compose-rules-detekt = { group = "io.nlopez.compose.rules", name = "detekt", ver
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }

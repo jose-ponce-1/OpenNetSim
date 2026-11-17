@@ -3,6 +3,8 @@ package com.opennetsim.service.forwarder
 import java.io.Closeable
 import java.io.IOException
 import java.net.InetAddress
+import java.util.concurrent.Semaphore
+import java.util.concurrent.TimeUnit
 
 /**
  * Socket de ping del sistema conectado a un destino (`SOCK_DGRAM` + `IPPROTO_ICMP`/`IPPROTO_ICMPV6`,
@@ -44,18 +46,20 @@ interface IcmpEchoTransport {
     companion object {
         /** Transporte sin sockets de ping: todo echo request se descarta, como en una red sin ICMP. */
         val UNAVAILABLE: IcmpEchoTransport = object : IcmpEchoTransport {
-            private val lock = Object()
+            // Un aviso de wakeup() anterior a la espera no se pierde: la siguiente espera vuelve enseguida.
+            private val wakeups = Semaphore(0)
 
             override fun open(destination: InetAddress): IcmpEchoSocket =
                 throw IOException("Sockets de ping no disponibles")
 
             override fun awaitReadable(sockets: Collection<IcmpEchoSocket>, timeoutMs: Long): List<IcmpEchoSocket> {
-                synchronized(lock) { lock.wait(timeoutMs.coerceAtLeast(1L)) }
+                wakeups.tryAcquire(timeoutMs.coerceAtLeast(1L), TimeUnit.MILLISECONDS)
+                wakeups.drainPermits()
                 return emptyList()
             }
 
             override fun wakeup() {
-                synchronized(lock) { lock.notifyAll() }
+                wakeups.release()
             }
 
             override fun close() = wakeup()
