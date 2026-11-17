@@ -37,7 +37,10 @@ object TunnelIntents {
     private const val EXTRA_UP_KBPS = "extra_up_kbps"
     private const val EXTRA_LATENCY_MS = "extra_latency_ms"
     private const val EXTRA_JITTER_MS = "extra_jitter_ms"
-    private const val EXTRA_LOSS_PERCENT = "extra_loss_percent"
+    private const val EXTRA_UP_LOSS_PERCENT = "extra_up_loss_percent"
+    private const val EXTRA_DOWN_LOSS_PERCENT = "extra_down_loss_percent"
+    private const val EXTRA_LOSS_BURST_LENGTH = "extra_loss_burst_length"
+    private const val EXTRA_REORDER_PERCENT = "extra_reorder_percent"
     private const val EXTRA_PRESET_NAME = "extra_preset_name"
 
     fun start(context: Context, config: ThrottleConfig): Intent =
@@ -65,13 +68,25 @@ object TunnelIntents {
         intent.putExtra(EXTRA_UP_KBPS, config.upKbps)
         intent.putExtra(EXTRA_LATENCY_MS, config.latencyMs)
         intent.putExtra(EXTRA_JITTER_MS, config.jitterMs)
-        intent.putExtra(EXTRA_LOSS_PERCENT, config.packetLossPercent)
+        intent.putExtra(EXTRA_UP_LOSS_PERCENT, config.upLossPercent)
+        intent.putExtra(EXTRA_DOWN_LOSS_PERCENT, config.downLossPercent)
+        intent.putExtra(EXTRA_LOSS_BURST_LENGTH, config.lossBurstLength)
+        intent.putExtra(EXTRA_REORDER_PERCENT, config.reorderPercent)
         intent.putExtra(EXTRA_PRESET_NAME, config.preset.name)
     }
 
     /** Lee la configuración completa del intent, o null si falta algún extra. */
     private fun readConfig(intent: Intent): ThrottleConfig? {
-        val required = listOf(EXTRA_DOWN_KBPS, EXTRA_UP_KBPS, EXTRA_LATENCY_MS, EXTRA_JITTER_MS, EXTRA_LOSS_PERCENT)
+        val required = listOf(
+            EXTRA_DOWN_KBPS,
+            EXTRA_UP_KBPS,
+            EXTRA_LATENCY_MS,
+            EXTRA_JITTER_MS,
+            EXTRA_UP_LOSS_PERCENT,
+            EXTRA_DOWN_LOSS_PERCENT,
+            EXTRA_LOSS_BURST_LENGTH,
+            EXTRA_REORDER_PERCENT
+        )
         if (required.any { !intent.hasExtra(it) }) return null
         val preset = intent.getStringExtra(EXTRA_PRESET_NAME)
             ?.let { name -> ThrottlePreset.entries.firstOrNull { it.name == name } }
@@ -81,7 +96,10 @@ object TunnelIntents {
             upKbps = intent.getIntExtra(EXTRA_UP_KBPS, 0),
             latencyMs = intent.getIntExtra(EXTRA_LATENCY_MS, 0),
             jitterMs = intent.getIntExtra(EXTRA_JITTER_MS, 0),
-            packetLossPercent = intent.getFloatExtra(EXTRA_LOSS_PERCENT, 0f),
+            upLossPercent = intent.getFloatExtra(EXTRA_UP_LOSS_PERCENT, 0f),
+            downLossPercent = intent.getFloatExtra(EXTRA_DOWN_LOSS_PERCENT, 0f),
+            lossBurstLength = intent.getIntExtra(EXTRA_LOSS_BURST_LENGTH, 1),
+            reorderPercent = intent.getFloatExtra(EXTRA_REORDER_PERCENT, 0f),
             preset = preset
         )
     }

@@ -90,10 +90,43 @@ Aplicación Android moderna (Kotlin + Jetpack Compose) que simula condiciones de
 - [x] 152 tests JVM en verde (1 omitido en Windows), `detekt` y `lintDebug` sin errores.
 - [x] Verificación en dispositivo con `app-debug.apk` (usuario, 17/11/2026: todo funciona) y CI de GitHub Actions en verde; los cinco cambios archivados en `openspec/changes/archive/2026-11-17-*`.
 
+### Fase 9: Fidelidad de la simulación (rama `feat/network-fidelity`)
+Decisiones del usuario (17/11/2026), tomadas comparando con `tc netem`, Network Link Conditioner y Clumsy.
+- [x] `forward-real-icmp`: el ping va a la red real con sockets de ping sin privilegios (RTT real + degradación; un host que no responde no responde). Se elimina `IcmpResponder`.
+- [x] `smooth-jitter-and-reordering`: jitter continuo que nunca reordena ni sesga la latencia bajo carga (hallazgo 8) y control aparte de reordenación (0–25 %).
+- [x] `directional-and-burst-loss`: pérdida de subida y de bajada por separado y en ráfagas (modelo de Gilbert, ráfaga media 1–10); migración de configuraciones guardadas.
+- [x] 175 tests JVM en verde (1 omitido en Windows), `detekt`, `lintDebug` y `assembleDebug` sin errores.
+- [x] Verificación en dispositivo con `app-debug.apk` (usuario, 17/11/2026: todo funciona) y CI en verde; los tres cambios archivados en `openspec/changes/archive/2026-11-17-*`.
+
+### Fase 10: Módulo `:core` y version catalog (cambio OpenSpec `extract-core-module`, rama `refactor/core-module`)
+- [x] `core/` y `model/` en el módulo Gradle `:core`, Kotlin/JVM puro: un `import android.*` ya no compila.
+- [x] Version catalog `gradle/libs.versions.toml` (mismas versiones); detekt configurado en el script raíz con una baseline por módulo (127 entradas, antes 142, ninguna nueva).
+- [x] 175 tests (115 en `:core`, 60 en `:app`, 1 omitido en Windows), `detekt`, `lintDebug` y `assembleDebug` en verde.
+- [x] CI de GitHub Actions en verde con los dos módulos (PR #6); cambio archivado.
+- [x] La CI destapó una carrera en `UdpForwarder.close()` y `TcpForwarder.close()` (cerraban el selector desde otro hilo: NullPointerException del JDK en `AbstractSelector.deregister`). Ahora, como en `IcmpForwarder`, se libera todo en el hilo del bucle; test de estrés añadido. Verificado en dispositivo.
+
+### Fase 11: Actualización de AGP, Kotlin y detekt (cambio OpenSpec `upgrade-toolchain`, PR #7)
+- [x] AGP 8.7.3 → 9.3.3, Kotlin 2.0.21 → 2.4.21 (Kotlin integrado de AGP 9, sin `kotlin-android`), detekt 1.23.7 → 1.23.8; Gradle 9.7.1 se mantiene. Combinación dentro de las matrices oficiales.
+- [x] 176 tests (1 omitido en Windows), `detekt`, `lintDebug` y `assembleDebug` en verde.
+- [x] CI de GitHub Actions en verde y verificación en dispositivo; cambio archivado.
+
+---
+
+## Hoja de Ruta
+1. ~~Fidelidad de la simulación~~ (Fase 9).
+2. ~~Módulo `:core` y version catalog~~ (Fase 10).
+3. ~~Actualizar AGP, Kotlin y Gradle~~ (Fase 11). Queda un aviso de Gradle 10 que viene del plugin de detekt 1.23.8: se resuelve con detekt 2.0 cuando sea estable. Pendiente aparte: Compose BOM, AndroidX y corrutinas.
+4. Preparar la release: R8, firma, icono propio en la notificación y corregir el texto de la tarjeta informativa ("No se envían paquetes fuera de tu dispositivo" no es cierto).
+5. Rendimiento y deuda: microbenchmark del camino de cada paquete antes de optimizar, reducir las baselines de detekt y medir cobertura con Kover.
+6. Nueva interfaz (pedido por el usuario el 17/11/2026):
+   - Sustituir los sliders por campos para escribir el valor exacto (ancho de banda en kbps/Mbps, como otras apps; también latencia, jitter y porcentajes).
+   - Paleta de colores oficial de OpenNetSim. Colores del logo encontrados en `res/drawable` (pendientes de que el usuario confirme los oficiales o envíe prototipos): `#0067C6`, `#00C4FF`, `#67E8F9` y `#FFFFFF`.
+   - Pantalla de inicio con el logo (API SplashScreen de Android 12 mediante `androidx.core:core-splashscreen` para API 26+).
+
 ---
 
 ## Punto de Retorno (Checkpoint)
-- **Últimos archivos modificados:** `core/time/`, `core/engine/`, `tunnel/`, `service/` (`pipeline/`, forwarders), `ui/`, `config/detekt/`, `.github/workflows/ci.yml` y `openspec/` (Fase 8, PR #3 de `fix/audit-corrections` hacia `develop`).
-- **Estado General:** Fases 1–8 cerradas y verificadas en dispositivo; sin cambios OpenSpec abiertos.
+- **Últimos archivos modificados:** `gradle/libs.versions.toml`, `build.gradle.kts`, `app/build.gradle.kts`, `IcmpEchoTransport.kt`, README y `openspec/changes/archive/` (Fase 11).
+- **Estado General:** Fases 1–11 cerradas, verificadas en dispositivo y fusionadas en `develop` (PR #5, #6 y #7); `main` sigue sin estos cambios.
 - **Artefacto de Distribución:** APK de depuración en `app/build/outputs/apk/debug/app-debug.apk`.
-- **Siguiente acción inmediata:** Fusionar el PR #3 en `develop`. Pendientes de decidir para próximos cambios: módulo `:core` independiente, ICMP real, semántica del jitter, optimización del camino de cada paquete, version catalog, Kover y configuración de release.
+- **Siguiente acción inmediata:** el paso 4 de la hoja de ruta (preparar la release).

@@ -137,27 +137,11 @@ class MainViewModel(
         userConfig.value = newConfig
     }
 
-    fun updateDownBandwidth(kbps: Int) {
-        updateParameter { it.copy(downKbps = kbps) }
-    }
-
-    fun updateUpBandwidth(kbps: Int) {
-        updateParameter { it.copy(upKbps = kbps) }
-    }
-
-    fun updateLatency(latencyMs: Int) {
-        updateParameter { it.copy(latencyMs = latencyMs) }
-    }
-
-    fun updateJitter(jitterMs: Int) {
-        updateParameter { it.copy(jitterMs = jitterMs) }
-    }
-
-    fun updatePacketLoss(packetLossPercent: Float) {
-        updateParameter { it.copy(packetLossPercent = packetLossPercent) }
-    }
-
-    private fun updateParameter(transform: (ThrottleConfig) -> ThrottleConfig) {
+    /**
+     * Cambio de un control: [transform] modifica solo su parámetro. El perfil pasa a CUSTOM salvo que
+     * el resultado coincida exactamente con uno predefinido.
+     */
+    fun editConfig(transform: (ThrottleConfig) -> ThrottleConfig) {
         val updated = _uiState.updateAndGet { current ->
             val modified = transform(current.config)
             val matchedPreset = ThrottlePreset.entries.firstOrNull { modified.matchesPreset(it) }

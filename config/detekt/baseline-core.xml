@@ -1,0 +1,106 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues></ManuallySuppressedIssues>
+  <CurrentIssues>
+    <ID>LongParameterList:ChecksumUtils.kt$ChecksumUtils$( srcIp: ByteArray, dstIp: ByteArray, protocol: Int, segmentData: ByteArray, offset: Int, length: Int )</ID>
+    <ID>LongParameterList:TcpPacket.kt$TcpPacket.Companion$( srcPort: Int, dstPort: Int, seqNum: Long, ackNum: Long, payload: ByteArray, windowSize: Int = 65535 )</ID>
+    <ID>LongParameterList:ThrottlePreset.kt$ThrottlePreset$( val displayName: String, val description: String, val downKbps: Int, val upKbps: Int, val latencyMs: Int, val jitterMs: Int, val packetLossPercent: Float )</ID>
+    <ID>LoopWithTooManyJumpStatements:LatencyQueue.kt$LatencyQueue$while</ID>
+    <ID>MagicNumber:ChecksumUtils.kt$ChecksumUtils$0xFF</ID>
+    <ID>MagicNumber:ChecksumUtils.kt$ChecksumUtils$0xFFFF</ID>
+    <ID>MagicNumber:ChecksumUtils.kt$ChecksumUtils$16</ID>
+    <ID>MagicNumber:ChecksumUtils.kt$ChecksumUtils$3</ID>
+    <ID>MagicNumber:ChecksumUtils.kt$ChecksumUtils$8</ID>
+    <ID>MagicNumber:IcmpPacket.kt$IcmpPacket.Companion$0xFF</ID>
+    <ID>MagicNumber:IcmpPacket.kt$IcmpPacket.Companion$3</ID>
+    <ID>MagicNumber:IcmpPacket.kt$IcmpPacket.Companion$4</ID>
+    <ID>MagicNumber:IcmpPacket.kt$IcmpPacket.Companion$5</ID>
+    <ID>MagicNumber:IcmpPacket.kt$IcmpPacket.Companion$6</ID>
+    <ID>MagicNumber:IcmpPacket.kt$IcmpPacket.Companion$7</ID>
+    <ID>MagicNumber:IcmpPacket.kt$IcmpPacket.Companion$8</ID>
+    <ID>MagicNumber:IpPacket.kt$IpPacket$0x07</ID>
+    <ID>MagicNumber:IpPacket.kt$IpPacket$0x1FFF</ID>
+    <ID>MagicNumber:IpPacket.kt$IpPacket$10</ID>
+    <ID>MagicNumber:IpPacket.kt$IpPacket$13</ID>
+    <ID>MagicNumber:IpPacket.kt$IpPacket$4</ID>
+    <ID>MagicNumber:IpPacket.kt$IpPacket.Companion$0x07</ID>
+    <ID>MagicNumber:IpPacket.kt$IpPacket.Companion$0x1FFF</ID>
+    <ID>MagicNumber:IpPacket.kt$IpPacket.Companion$0xFF</ID>
+    <ID>MagicNumber:IpPacket.kt$IpPacket.Companion$10</ID>
+    <ID>MagicNumber:IpPacket.kt$IpPacket.Companion$11</ID>
+    <ID>MagicNumber:IpPacket.kt$IpPacket.Companion$12</ID>
+    <ID>MagicNumber:IpPacket.kt$IpPacket.Companion$13</ID>
+    <ID>MagicNumber:IpPacket.kt$IpPacket.Companion$16</ID>
+    <ID>MagicNumber:IpPacket.kt$IpPacket.Companion$20</ID>
+    <ID>MagicNumber:IpPacket.kt$IpPacket.Companion$3</ID>
+    <ID>MagicNumber:IpPacket.kt$IpPacket.Companion$4</ID>
+    <ID>MagicNumber:IpPacket.kt$IpPacket.Companion$5</ID>
+    <ID>MagicNumber:IpPacket.kt$IpPacket.Companion$6</ID>
+    <ID>MagicNumber:IpPacket.kt$IpPacket.Companion$7</ID>
+    <ID>MagicNumber:IpPacket.kt$IpPacket.Companion$8</ID>
+    <ID>MagicNumber:IpPacket.kt$IpPacket.Companion$9</ID>
+    <ID>MagicNumber:Ipv6Packet.kt$Ipv6Packet$0x000FFFFF</ID>
+    <ID>MagicNumber:Ipv6Packet.kt$Ipv6Packet$0xFF</ID>
+    <ID>MagicNumber:Ipv6Packet.kt$Ipv6Packet$16</ID>
+    <ID>MagicNumber:Ipv6Packet.kt$Ipv6Packet$20</ID>
+    <ID>MagicNumber:Ipv6Packet.kt$Ipv6Packet$28</ID>
+    <ID>MagicNumber:Ipv6Packet.kt$Ipv6Packet.Companion$0xF0</ID>
+    <ID>MagicNumber:Ipv6Packet.kt$Ipv6Packet.Companion$0xFF</ID>
+    <ID>MagicNumber:Ipv6Packet.kt$Ipv6Packet.Companion$16</ID>
+    <ID>MagicNumber:Ipv6Packet.kt$Ipv6Packet.Companion$24</ID>
+    <ID>MagicNumber:Ipv6Packet.kt$Ipv6Packet.Companion$3</ID>
+    <ID>MagicNumber:Ipv6Packet.kt$Ipv6Packet.Companion$4</ID>
+    <ID>MagicNumber:Ipv6Packet.kt$Ipv6Packet.Companion$40</ID>
+    <ID>MagicNumber:Ipv6Packet.kt$Ipv6Packet.Companion$5</ID>
+    <ID>MagicNumber:Ipv6Packet.kt$Ipv6Packet.Companion$6</ID>
+    <ID>MagicNumber:Ipv6Packet.kt$Ipv6Packet.Companion$7</ID>
+    <ID>MagicNumber:Ipv6Packet.kt$Ipv6Packet.Companion$8</ID>
+    <ID>MagicNumber:TcpPacket.kt$TcpPacket$0xFF</ID>
+    <ID>MagicNumber:TcpPacket.kt$TcpPacket$0xFFFFFFFFL</ID>
+    <ID>MagicNumber:TcpPacket.kt$TcpPacket$16</ID>
+    <ID>MagicNumber:TcpPacket.kt$TcpPacket$20</ID>
+    <ID>MagicNumber:TcpPacket.kt$TcpPacket$4</ID>
+    <ID>MagicNumber:TcpPacket.kt$TcpPacket.Companion$0xF0</ID>
+    <ID>MagicNumber:TcpPacket.kt$TcpPacket.Companion$0xFF</ID>
+    <ID>MagicNumber:TcpPacket.kt$TcpPacket.Companion$0xFFFFFFFFL</ID>
+    <ID>MagicNumber:TcpPacket.kt$TcpPacket.Companion$10</ID>
+    <ID>MagicNumber:TcpPacket.kt$TcpPacket.Companion$11</ID>
+    <ID>MagicNumber:TcpPacket.kt$TcpPacket.Companion$12</ID>
+    <ID>MagicNumber:TcpPacket.kt$TcpPacket.Companion$13</ID>
+    <ID>MagicNumber:TcpPacket.kt$TcpPacket.Companion$14</ID>
+    <ID>MagicNumber:TcpPacket.kt$TcpPacket.Companion$15</ID>
+    <ID>MagicNumber:TcpPacket.kt$TcpPacket.Companion$16</ID>
+    <ID>MagicNumber:TcpPacket.kt$TcpPacket.Companion$17</ID>
+    <ID>MagicNumber:TcpPacket.kt$TcpPacket.Companion$18</ID>
+    <ID>MagicNumber:TcpPacket.kt$TcpPacket.Companion$19</ID>
+    <ID>MagicNumber:TcpPacket.kt$TcpPacket.Companion$24</ID>
+    <ID>MagicNumber:TcpPacket.kt$TcpPacket.Companion$3</ID>
+    <ID>MagicNumber:TcpPacket.kt$TcpPacket.Companion$4</ID>
+    <ID>MagicNumber:TcpPacket.kt$TcpPacket.Companion$5</ID>
+    <ID>MagicNumber:TcpPacket.kt$TcpPacket.Companion$6</ID>
+    <ID>MagicNumber:TcpPacket.kt$TcpPacket.Companion$7</ID>
+    <ID>MagicNumber:TcpPacket.kt$TcpPacket.Companion$8</ID>
+    <ID>MagicNumber:TcpPacket.kt$TcpPacket.Companion$9</ID>
+    <ID>MagicNumber:UdpPacket.kt$UdpPacket$0xFFFF</ID>
+    <ID>MagicNumber:UdpPacket.kt$UdpPacket$6</ID>
+    <ID>MagicNumber:UdpPacket.kt$UdpPacket$8</ID>
+    <ID>MagicNumber:UdpPacket.kt$UdpPacket.Companion$0xFF</ID>
+    <ID>MagicNumber:UdpPacket.kt$UdpPacket.Companion$3</ID>
+    <ID>MagicNumber:UdpPacket.kt$UdpPacket.Companion$4</ID>
+    <ID>MagicNumber:UdpPacket.kt$UdpPacket.Companion$5</ID>
+    <ID>MagicNumber:UdpPacket.kt$UdpPacket.Companion$6</ID>
+    <ID>MagicNumber:UdpPacket.kt$UdpPacket.Companion$7</ID>
+    <ID>MagicNumber:UdpPacket.kt$UdpPacket.Companion$8</ID>
+    <ID>MaxLineLength:BidirectionalThrottlingEngineTest.kt$BidirectionalThrottlingEngineTest$// Asymmetric configuration: Uplink heavily throttled (10 kbps = 1250 B/s), Downlink fast (1000 kbps = 125,000 B/s)</ID>
+    <ID>MaxLineLength:BidirectionalThrottlingEngineTest.kt$BidirectionalThrottlingEngineTest$// Verify MTU burst capacity floor on uplink (10 kbps -&gt; 1250 B/s, but burst floor is MIN_BURST_CAPACITY_BYTES = 1500B)</ID>
+    <ID>MaxLineLength:IpPacket.kt$IpPacket.Companion$return "${ipBytes[0].toInt() and 0xFF}.${ipBytes[1].toInt() and 0xFF}.${ipBytes[2].toInt() and 0xFF}.${ipBytes[3].toInt() and 0xFF}"</ID>
+    <ID>MaximumLineLength:IpPacket.kt$IpPacket.Companion$ </ID>
+    <ID>ReturnCount:IpPacket.kt$IpPacket.Companion$fun parse(data: ByteArray, offset: Int = 0, length: Int = data.size): IpPacket?</ID>
+    <ID>ReturnCount:Ipv6Packet.kt$Ipv6Packet.Companion$fun parse(data: ByteArray, offset: Int = 0, length: Int = data.size): Ipv6Packet?</ID>
+    <ID>ReturnCount:TcpPacket.kt$TcpPacket.Companion$fun parse(data: ByteArray, offset: Int = 0, length: Int = data.size): TcpPacket?</ID>
+    <ID>ReturnCount:UdpPacket.kt$UdpPacket.Companion$fun parse(data: ByteArray, offset: Int = 0, length: Int = data.size): UdpPacket?</ID>
+    <ID>SwallowedException:Ipv6Packet.kt$Ipv6Packet.Companion$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:Ipv6Packet.kt$Ipv6Packet.Companion$e: Exception</ID>
+    <ID>UnusedPrivateProperty:PacketLossSimulatorTest.kt$PacketLossSimulatorTest$i</ID>
+  </CurrentIssues>
+</SmellBaseline>

@@ -52,7 +52,8 @@ class MainViewModelTest {
         upKbps = 400,
         latencyMs = 300,
         jitterMs = 10,
-        packetLossPercent = 1f,
+        upLossPercent = 1f,
+        downLossPercent = 1f,
         preset = ThrottlePreset.CUSTOM
     )
 
@@ -105,7 +106,7 @@ class MainViewModelTest {
 
         // 2 s de arrastre continuo: un cambio cada 20 ms
         repeat(100) { step ->
-            vm.updateLatency(100 + step)
+            vm.editConfig { it.copy(latencyMs = 100 + step) }
             advanceTimeBy(20L)
         }
         advanceTimeBy(MainViewModel.CONFIG_DEBOUNCE_MS * 3)
@@ -141,7 +142,7 @@ class MainViewModelTest {
         val tunnel = FakeTunnelController(initialState = TunnelState.Running(customConfig, ipv6Routed = false))
         val vm = viewModel(tunnel)
 
-        vm.updateLatency(350)
+        vm.editConfig { it.copy(latencyMs = 350) }
         // El servicio confirma un valor intermedio mientras el usuario sigue arrastrando.
         tunnel.state.value = TunnelState.Running(customConfig.copy(latencyMs = 320), ipv6Routed = false)
         assertEquals(350, vm.uiState.value.config.latencyMs)

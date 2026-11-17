@@ -15,6 +15,7 @@ import androidx.activity.viewModels
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -82,15 +83,13 @@ fun MainAppContent(viewModel: MainViewModel) {
         }
     }
 
-    ThrottleDashboardScreen(
-        uiState = uiState,
-        onPresetSelected = viewModel::selectPreset,
-        onDownBandwidthChanged = viewModel::updateDownBandwidth,
-        onUpBandwidthChanged = viewModel::updateUpBandwidth,
-        onLatencyChanged = viewModel::updateLatency,
-        onJitterChanged = viewModel::updateJitter,
-        onPacketLossChanged = viewModel::updatePacketLoss,
-        onToggleClick = viewModel::onToggleClicked,
-        onDismissSnackbar = viewModel::clearMessage
-    )
+    val actions = remember(viewModel) {
+        DashboardActions(
+            onPresetSelect = viewModel::selectPreset,
+            onConfigChange = viewModel::editConfig,
+            onToggleClick = viewModel::onToggleClicked,
+            onSnackbarDismiss = viewModel::clearMessage
+        )
+    }
+    ThrottleDashboardScreen(uiState = uiState, actions = actions)
 }
