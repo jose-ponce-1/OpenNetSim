@@ -1,5 +1,6 @@
-﻿package com.opennetsim.core.engine
+package com.opennetsim.core.engine
 
+import com.opennetsim.core.time.MonotonicClock
 import com.opennetsim.model.ThrottleConfig
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -19,12 +20,12 @@ class ThrottlingEngineTest {
         val limiter = TokenBucketLimiter(
             bytesPerSecond = bytesPerSec,
             burstCapacityBytes = bytesPerSec,
-            timeSourceNanos = { simulatedTimeMs * 1_000_000L }
+            clock = MonotonicClock.ofMillis { simulatedTimeMs }
         )
         val queue = LatencyQueue(
             baseLatencyMs = baseLatencyMs,
             jitterMs = jitterMs,
-            timeSourceMs = { simulatedTimeMs },
+            clock = MonotonicClock.ofMillis { simulatedTimeMs },
             jitterRandom = { _, _ -> 0L }
         )
         val lossSim = PacketLossSimulator(initialLossProbability = lossProbability)
@@ -33,7 +34,7 @@ class ThrottlingEngineTest {
             bandwidthLimiter = limiter,
             latencyQueue = queue,
             packetLossSimulator = lossSim,
-            timeSourceMs = { simulatedTimeMs }
+            clock = MonotonicClock.ofMillis { simulatedTimeMs }
         )
     }
 
@@ -43,11 +44,11 @@ class ThrottlingEngineTest {
         val engine = ThrottlingEngine(
             bandwidthLimiter = TokenBucketLimiter(
                 bytesPerSecond = 16_000L,
-                timeSourceNanos = { simulatedTimeMs * 1_000_000L }
+                clock = MonotonicClock.ofMillis { simulatedTimeMs }
             ),
-            latencyQueue = LatencyQueue(timeSourceMs = { simulatedTimeMs }),
+            latencyQueue = LatencyQueue(clock = MonotonicClock.ofMillis { simulatedTimeMs }),
             packetLossSimulator = PacketLossSimulator(),
-            timeSourceMs = { simulatedTimeMs }
+            clock = MonotonicClock.ofMillis { simulatedTimeMs }
         )
         val startMs = simulatedTimeMs
 
@@ -197,10 +198,14 @@ class ThrottlingEngineTest {
         val enq3 = res3 as PacketResult.Enqueued
 
         // Los tiempos deben ser estrictamente crecientes para preservar FIFO (sin inversión de prioridades)
-        assertTrue("enq1 (${enq1.scheduledReleaseTimeMs}) debe ser <= enq2 (${enq2.scheduledReleaseTimeMs})",
-            enq1.scheduledReleaseTimeMs <= enq2.scheduledReleaseTimeMs)
-        assertTrue("enq2 (${enq2.scheduledReleaseTimeMs}) debe ser < enq3 (${enq3.scheduledReleaseTimeMs})",
-            enq2.scheduledReleaseTimeMs < enq3.scheduledReleaseTimeMs)
+        assertTrue(
+            "enq1 (${enq1.scheduledReleaseTimeMs}) debe ser <= enq2 (${enq2.scheduledReleaseTimeMs})",
+            enq1.scheduledReleaseTimeMs <= enq2.scheduledReleaseTimeMs
+        )
+        assertTrue(
+            "enq2 (${enq2.scheduledReleaseTimeMs}) debe ser < enq3 (${enq3.scheduledReleaseTimeMs})",
+            enq2.scheduledReleaseTimeMs < enq3.scheduledReleaseTimeMs
+        )
 
         // Avanzar el tiempo más allá del último y drenar
         simulatedTimeMs = enq3.scheduledReleaseTimeMs + 100L
@@ -217,14 +222,14 @@ class ThrottlingEngineTest {
         val limiter = TokenBucketLimiter(
             bytesPerSecond = 10_000L,
             burstCapacityBytes = 1500L,
-            timeSourceNanos = { simulatedTimeMs * 1_000_000L }
+            clock = MonotonicClock.ofMillis { simulatedTimeMs }
         )
-        val queue = LatencyQueue(baseLatencyMs = 200L, timeSourceMs = { simulatedTimeMs })
+        val queue = LatencyQueue(baseLatencyMs = 200L, clock = MonotonicClock.ofMillis { simulatedTimeMs })
         val engine = ThrottlingEngine(
             bandwidthLimiter = limiter,
             latencyQueue = queue,
             packetLossSimulator = PacketLossSimulator(0.0),
-            timeSourceMs = { simulatedTimeMs }
+            clock = MonotonicClock.ofMillis { simulatedTimeMs }
         )
         // max(2 × 1500, 10_000 B/s × (500 + 200) ms) = 7_000 B
         assertEquals(7_000L, engine.bulkCapacityBytes)
@@ -247,11 +252,11 @@ class ThrottlingEngineTest {
         ThrottlingEngine(
             bandwidthLimiter = TokenBucketLimiter(
                 bytesPerSecond = bytesPerSec,
-                timeSourceNanos = { simulatedTimeMs * 1_000_000L }
+                clock = MonotonicClock.ofMillis { simulatedTimeMs }
             ),
-            latencyQueue = LatencyQueue(baseLatencyMs = latencyMs, timeSourceMs = { simulatedTimeMs }),
+            latencyQueue = LatencyQueue(baseLatencyMs = latencyMs, clock = MonotonicClock.ofMillis { simulatedTimeMs }),
             packetLossSimulator = PacketLossSimulator(lossProbability),
-            timeSourceMs = { simulatedTimeMs }
+            clock = MonotonicClock.ofMillis { simulatedTimeMs }
         )
 
     /** Drena simulando el reloj hasta vaciar ambos carriles; devuelve (paquete, instante de salida). */
@@ -366,5 +371,37 @@ class ThrottlingEngineTest {
         val dropRate = engine.getMetrics().totalDroppedPackets.toDouble() / total
         assertEquals("Tasa de descarte medida", 0.05, dropRate, 0.01)
     }
-}
 
+    @Test
+    fun testQueueAndTokenBucketShareTheSameMonotonicClock() {
+        // 10 kB/s con ráfaga de 1500 B: un reloj compartido es la única fuente de tiempo del pipeline.
+        val engine = ThrottlingEngine.createPipeline(
+            rateKbps = 80,
+            latencyMs = 300,
+            jitterMs = 0,
+            packetLossPercent = 0f,
+            clock = MonotonicClock.ofMillis { simulatedTimeMs }
+        )
+        // Vaciar la ráfaga inicial.
+        engine.processIncoming(ByteArray(1500), simulatedTimeMs, allowImmediateRelease = false)
+        simulatedTimeMs += 300L
+        assertEquals(1, engine.drainReady().size)
+
+        // Con el reloj parado, nada sale aunque pase tiempo de pared.
+        engine.processIncoming(ByteArray(1000), allowImmediateRelease = false)
+        Thread.sleep(20L)
+        assertTrue(engine.drainReady().isEmpty())
+
+        // 300 ms de latencia simulada: el bucket acumuló 3000 B, recortados a la ráfaga (1500 B).
+        simulatedTimeMs += 300L
+        assertEquals(1, engine.drainReady().size)
+        assertEquals(500.0, engine.bandwidthLimiter.currentTokens, 0.5)
+    }
+
+    @Test
+    fun testMonotonicClockFromMillisRoundTrips() {
+        val clock = MonotonicClock.ofMillis { 1_234L }
+        assertEquals(1_234L, clock.nowMs())
+        assertEquals(1_234L * MonotonicClock.NANOS_PER_MS, clock.nowNanos())
+    }
+}

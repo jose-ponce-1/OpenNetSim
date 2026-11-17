@@ -1,4 +1,4 @@
-﻿package com.opennetsim.core.packet
+package com.opennetsim.core.packet
 
 import java.net.Inet6Address
 import java.net.InetAddress
@@ -38,8 +38,8 @@ data class Ipv6Packet(
 
         // Version (4 bits = 6) + Traffic Class (8 bits) + Flow Label (20 bits) = 32 bits
         val vtcFlow = ((version and 0x0F) shl 28) or
-                ((trafficClass and 0xFF) shl 20) or
-                (flowLabel and 0x000FFFFF)
+            ((trafficClass and 0xFF) shl 20) or
+            (flowLabel and 0x000FFFFF)
         buffer.putInt(vtcFlow)
 
         // Payload Length (16 bits)
@@ -118,8 +118,8 @@ data class Ipv6Packet(
 
             val trafficClass = ((data[offset].toInt() and 0x0F) shl 4) or ((data[offset + 1].toInt() and 0xF0) ushr 4)
             val flowLabel = ((data[offset + 1].toInt() and 0x0F) shl 16) or
-                    ((data[offset + 2].toInt() and 0xFF) shl 8) or
-                    (data[offset + 3].toInt() and 0xFF)
+                ((data[offset + 2].toInt() and 0xFF) shl 8) or
+                (data[offset + 3].toInt() and 0xFF)
 
             val payloadLength = ((data[offset + 4].toInt() and 0xFF) shl 8) or (data[offset + 5].toInt() and 0xFF)
             val totalPacketLength = HEADER_SIZE + payloadLength
@@ -151,4 +151,3 @@ data class Ipv6Packet(
         }
     }
 }
-

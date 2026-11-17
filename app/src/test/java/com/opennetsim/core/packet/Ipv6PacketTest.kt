@@ -1,4 +1,4 @@
-﻿package com.opennetsim.core.packet
+package com.opennetsim.core.packet
 
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -94,4 +94,3 @@ class Ipv6PacketTest {
         assertEquals(Ipv6Packet.PROTOCOL_TCP, parsedIp!!.nextHeader)
     }
 }
-

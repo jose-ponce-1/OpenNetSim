@@ -1,4 +1,4 @@
-﻿package com.opennetsim.model
+package com.opennetsim.model
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -43,5 +43,13 @@ class ThrottleConfigTest {
         assertEquals("10.0 Mbps", configMbps.formattedDownBandwidth())
         assertEquals("2.5 Mbps", configMbps.formattedUpBandwidth())
     }
-}
 
+    @Test
+    fun roundTripLossCompoundsPerDirectionLoss() {
+        // "Wi-Fi inestable": 8 % por dirección → un ping se pierde el 15,36 % de las veces.
+        assertEquals(15.36f, ThrottleConfig.roundTripLossPercent(8f), 0.01f)
+        assertEquals(0f, ThrottleConfig.roundTripLossPercent(0f), 0.0001f)
+        assertEquals(75f, ThrottleConfig.roundTripLossPercent(50f), 0.01f)
+        assertEquals(100f, ThrottleConfig.roundTripLossPercent(150f), 0.01f)
+    }
+}

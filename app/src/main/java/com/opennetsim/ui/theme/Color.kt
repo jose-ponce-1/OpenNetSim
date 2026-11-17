@@ -1,4 +1,4 @@
-﻿package com.opennetsim.ui.theme
+package com.opennetsim.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
@@ -20,4 +20,3 @@ val EmeraldGlow = Color(0xFF34D399)
 val AmberWarning = Color(0xFFF59E0B)
 val RoseDanger = Color(0xFFF43F5E)
 val PurpleAccent = Color(0xFF8B5CF6)
-

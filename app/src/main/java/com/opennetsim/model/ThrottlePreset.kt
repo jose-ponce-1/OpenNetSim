@@ -1,4 +1,4 @@
-﻿package com.opennetsim.model
+package com.opennetsim.model
 
 /**
  * Perfiles preconfigurados para simular diferentes escenarios de degradación de red.
@@ -71,4 +71,3 @@ enum class ThrottlePreset(
         }
     }
 }
-

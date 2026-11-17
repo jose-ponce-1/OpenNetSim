@@ -1,4 +1,4 @@
-﻿package com.opennetsim.core.engine
+package com.opennetsim.core.engine
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -77,4 +77,3 @@ class PacketLossSimulatorTest {
         assertFalse(simulator.shouldDrop())
     }
 }
-

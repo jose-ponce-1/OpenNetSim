@@ -1,5 +1,6 @@
 package com.opennetsim.service.diag
 
+import com.opennetsim.core.time.MonotonicClock
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -47,7 +48,7 @@ class RateLimitedDiagnostics(
     private val sink: DiagnosticsSink,
     private val maxEntriesPerWindow: Int = DEFAULT_MAX_ENTRIES_PER_WINDOW,
     private val windowMs: Long = DEFAULT_WINDOW_MS,
-    private val clockMs: () -> Long = System::currentTimeMillis
+    private val clockMs: () -> Long = MonotonicClock.SYSTEM::nowMs
 ) : NetDiagnostics {
 
     private class KeyState(var windowStartMs: Long) {

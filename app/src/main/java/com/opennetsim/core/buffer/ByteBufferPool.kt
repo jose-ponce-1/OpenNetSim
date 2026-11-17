@@ -1,4 +1,4 @@
-﻿package com.opennetsim.core.buffer
+package com.opennetsim.core.buffer
 
 import java.nio.ByteBuffer
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -68,9 +68,8 @@ class ByteBufferPool(
 
     companion object {
         const val DEFAULT_BUFFER_SIZE = 32768 // 32 KB
-        const val DEFAULT_MAX_POOL_SIZE = 64  // 64 * 32 KB = 2 MB de retención máxima
+        const val DEFAULT_MAX_POOL_SIZE = 64 // 64 * 32 KB = 2 MB de retención máxima
 
         val defaultInstance by lazy { ByteBufferPool() }
     }
 }
-

@@ -1,5 +1,6 @@
-﻿package com.opennetsim.core.engine
+package com.opennetsim.core.engine
 
+import com.opennetsim.core.time.MonotonicClock
 import java.util.PriorityQueue
 import kotlin.math.max
 
@@ -28,9 +29,9 @@ data class DelayedPacket(
         if (javaClass != other?.javaClass) return false
         other as DelayedPacket
         return sequenceNumber == other.sequenceNumber &&
-                scheduledReleaseTimeMs == other.scheduledReleaseTimeMs &&
-                originalTimestampMs == other.originalTimestampMs &&
-                data.contentEquals(other.data)
+            scheduledReleaseTimeMs == other.scheduledReleaseTimeMs &&
+            originalTimestampMs == other.originalTimestampMs &&
+            data.contentEquals(other.data)
     }
 
     override fun hashCode(): Int {
@@ -48,14 +49,13 @@ data class DelayedPacket(
  *
  * @param baseLatencyMs Retardo base en milisegundos.
  * @param jitterMs Desviación máxima simétrica (+/- ms).
- * @param timeSourceMs Proveedor inyectable de tiempo actual en milisegundos.
+ * @param clock Reloj monotónico compartido con el resto del motor.
  * @param jitterRandom Generador de número aleatorio en un rango cerrado [min, max].
  */
 class LatencyQueue(
     var baseLatencyMs: Long = 0L,
     var jitterMs: Long = 0L,
-    val maxCapacity: Int = DEFAULT_MAX_CAPACITY,
-    private val timeSourceMs: () -> Long = System::currentTimeMillis,
+    private val clock: MonotonicClock = MonotonicClock.SYSTEM,
     private val jitterRandom: (minInclusive: Long, maxInclusive: Long) -> Long = { min, max ->
         if (min == max) min else kotlin.random.Random.nextLong(min, max + 1)
     }
@@ -68,9 +68,6 @@ class LatencyQueue(
 
     val isEmpty: Boolean
         @Synchronized get() = queue.isEmpty()
-
-    val isFull: Boolean
-        @Synchronized get() = queue.size >= maxCapacity
 
     /**
      * Calcula el retardo de latencia sumando la base y el jitter aleatorio.
@@ -91,7 +88,7 @@ class LatencyQueue(
     fun enqueueWithScheduledTime(
         data: ByteArray,
         scheduledReleaseTimeMs: Long,
-        originalTimestampMs: Long = timeSourceMs(),
+        originalTimestampMs: Long = clock.nowMs(),
         flowId: Long = DelayedPacket.NO_FLOW
     ): DelayedPacket {
         val delayedPacket = DelayedPacket(
@@ -111,7 +108,7 @@ class LatencyQueue(
      * scheduledTime = currentTimeMs + max(0, baseLatencyMs ± jitter)
      */
     @Synchronized
-    fun enqueue(data: ByteArray, currentTimeMs: Long = timeSourceMs()): DelayedPacket {
+    fun enqueue(data: ByteArray, currentTimeMs: Long = clock.nowMs()): DelayedPacket {
         val scheduledTime = currentTimeMs + calculateDelayMs()
         return enqueueWithScheduledTime(
             data = data,
@@ -124,7 +121,7 @@ class LatencyQueue(
      * Inspecciona sin extraer el siguiente paquete listo si su scheduledReleaseTimeMs <= currentTimeMs.
      */
     @Synchronized
-    fun peekReady(currentTimeMs: Long = timeSourceMs()): DelayedPacket? {
+    fun peekReady(currentTimeMs: Long = clock.nowMs()): DelayedPacket? {
         val next = queue.peek() ?: return null
         return if (next.scheduledReleaseTimeMs <= currentTimeMs) {
             next
@@ -137,7 +134,7 @@ class LatencyQueue(
      * Extrae el siguiente paquete listo para ser transmitido si su scheduledReleaseTimeMs <= currentTimeMs.
      */
     @Synchronized
-    fun pollReady(currentTimeMs: Long = timeSourceMs()): DelayedPacket? {
+    fun pollReady(currentTimeMs: Long = clock.nowMs()): DelayedPacket? {
         val next = queue.peek() ?: return null
         return if (next.scheduledReleaseTimeMs <= currentTimeMs) {
             queue.poll()
@@ -150,7 +147,7 @@ class LatencyQueue(
      * Drena y extrae todos los paquetes cuyo tiempo de liberación programado ya haya expirado.
      */
     @Synchronized
-    fun drainReady(currentTimeMs: Long = timeSourceMs()): List<ByteArray> {
+    fun drainReady(currentTimeMs: Long = clock.nowMs()): List<ByteArray> {
         val ready = mutableListOf<ByteArray>()
         while (true) {
             val next = queue.peek() ?: break
@@ -173,7 +170,7 @@ class LatencyQueue(
      * o null si la cola está vacía.
      */
     @Synchronized
-    fun timeUntilNextReadyMs(currentTimeMs: Long = timeSourceMs()): Long? {
+    fun timeUntilNextReadyMs(currentTimeMs: Long = clock.nowMs()): Long? {
         val next = queue.peek() ?: return null
         return max(0L, next.scheduledReleaseTimeMs - currentTimeMs)
     }
@@ -194,9 +191,4 @@ class LatencyQueue(
         this.baseLatencyMs = max(0L, newBaseLatencyMs)
         this.jitterMs = max(0L, newJitterMs)
     }
-
-    companion object {
-        const val DEFAULT_MAX_CAPACITY = 100
-    }
 }
-

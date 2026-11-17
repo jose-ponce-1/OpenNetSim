@@ -24,7 +24,9 @@ data class TcpConnectionConfig(
         const val DEFAULT_WINDOW_SCALE = 7
         const val DEFAULT_MAX_PENDING_WRITE_BYTES = 256 * 1024
         const val DEFAULT_MAX_OUT_OF_ORDER_BYTES = 256 * 1024
-        const val DEFAULT_ESTABLISHED_IDLE_TIMEOUT_MS = 600_000L // 10 min
+
+        /** RFC 5382 REQ-5: una conexión establecida debe sobrevivir al menos 2 h 4 min inactiva. */
+        const val DEFAULT_ESTABLISHED_IDLE_TIMEOUT_MS = 7_440_000L
         const val DEFAULT_CLOSING_IDLE_TIMEOUT_MS = 60_000L
         const val DEFAULT_HANDSHAKE_TIMEOUT_MS = 30_000L
         const val DEFAULT_MAX_RETRANSMISSIONS = 10
