@@ -47,6 +47,9 @@ jobs:
           ./gradlew :core:koverVerifyCoverage :app:koverVerifyCoverage :app:koverHtmlReportCoverage :app:koverLogCoverage --console=plain | tee kover.log
           grep "coverage" kover.log >> "$GITHUB_STEP_SUMMARY" || true
 
+      - name: Microbenchmarks (humo)
+        run: ./gradlew :benchmark:smokeBenchmark --console=plain
+
       - name: Release con R8 (sin firmar)
         run: ./gradlew :app:assembleRelease --console=plain
 

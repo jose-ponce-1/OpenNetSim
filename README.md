@@ -68,6 +68,10 @@ OpenNetSim/
 # Coverage with Kover: minimum 85% line coverage; HTML report in app/build/reports/kover/htmlCoverage
 ./gradlew :core:koverVerifyCoverage :app:koverVerifyCoverage :app:koverHtmlReportCoverage
 
+# Microbenchmarks (JMH) of the per-packet path in :core; see openspec design for reference numbers
+./gradlew :benchmark:smokeBenchmark       # quick check that benchmarks run
+./gradlew :benchmark:allocationBenchmark  # time (ns/op) and allocations (B/op)
+
 # Build debug APK
 ./gradlew assembleDebug
 
