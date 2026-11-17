@@ -68,6 +68,9 @@ estos serían los objetivos, por orden:
 2. Serialización IP + TCP en un único array.
 3. Checksum sumando palabras de 32 bits.
 
+El usuario decidió aplicarlas igualmente: cambio `optimize-packet-path`, con la medición antes y
+después. El checksum acabó leyendo palabras de 64 bits, porque las de 32 bits no mejoraban.
+
 ## Risks / Trade-offs
 - Las cifras de la JVM de escritorio no son las de ART: sirven para comparar, no como presupuesto
   exacto en el teléfono.

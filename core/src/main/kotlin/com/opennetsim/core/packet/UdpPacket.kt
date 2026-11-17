@@ -1,7 +1,5 @@
 package com.opennetsim.core.packet
 
-import java.nio.ByteBuffer
-
 /**
  * Representación, parser y serializador de datagramas UDP (RFC 768).
  */
@@ -13,33 +11,37 @@ data class UdpPacket(
     val payload: ByteArray
 ) {
     /**
-     * Serializa la cabecera y el payload UDP en un ByteArray, calculando el checksum con la pseudo-cabecera IPv4.
+     * Serializa la cabecera y el payload UDP en un ByteArray, calculando el checksum con la pseudo-cabecera
+     * IPv4 o IPv6 según el tamaño de [srcIp].
      */
-    fun toByteArray(srcIp: ByteArray, dstIp: ByteArray): ByteArray {
-        val totalLength = 8 + payload.size
-        val buffer = ByteBuffer.allocate(totalLength)
+    fun toByteArray(srcIp: ByteArray, dstIp: ByteArray): ByteArray =
+        ByteArray(HEADER_SIZE + payload.size).also { writeTo(it, 0, srcIp, dstIp) }
 
-        buffer.putShort(sourcePort.toShort())
-        buffer.putShort(destinationPort.toShort())
-        buffer.putShort(totalLength.toShort())
-        buffer.putShort(0.toShort()) // Checksum temporal en 0
-        buffer.put(payload)
+    /** Paquete IP completo (IPv4 o IPv6 según el tamaño de las direcciones) en un único array. */
+    fun toIpBytes(srcIp: ByteArray, dstIp: ByteArray): ByteArray {
+        val out = IpFraming.allocate(srcIp, dstIp, IpPacket.PROTOCOL_UDP, HEADER_SIZE + payload.size)
+        writeTo(out, IpFraming.headerSize(srcIp), srcIp, dstIp)
+        return out
+    }
 
-        val segmentData = buffer.array()
+    /** Escribe el datagrama con su checksum en [out] desde [offset]; ese tramo de [out] debe estar a cero. */
+    private fun writeTo(out: ByteArray, offset: Int, srcIp: ByteArray, dstIp: ByteArray) {
+        val totalLength = HEADER_SIZE + payload.size
+        PacketBytes.writeU16(out, offset, sourcePort)
+        PacketBytes.writeU16(out, offset + DESTINATION_PORT_OFFSET, destinationPort)
+        PacketBytes.writeU16(out, offset + LENGTH_OFFSET, totalLength)
+        System.arraycopy(payload, 0, out, offset + HEADER_SIZE, payload.size)
         val calculatedChecksum = ChecksumUtils.calculateTransportChecksum(
             srcIp = srcIp,
             dstIp = dstIp,
             protocol = IpPacket.PROTOCOL_UDP,
-            segmentData = segmentData,
-            offset = 0,
+            segmentData = out,
+            offset = offset,
             length = totalLength
         )
-
         // Si el checksum calculado es 0, en UDP se transmite como 0xFFFF (0 significa sin checksum en IPv4)
-        val finalChecksum = if (calculatedChecksum == 0) 0xFFFF else calculatedChecksum
-        buffer.putShort(6, finalChecksum.toShort())
-
-        return segmentData
+        val finalChecksum = if (calculatedChecksum == 0) NO_CHECKSUM_SUBSTITUTE else calculatedChecksum
+        PacketBytes.writeU16(out, offset + CHECKSUM_OFFSET, finalChecksum)
     }
 
     /**
@@ -94,6 +96,10 @@ data class UdpPacket(
 
     companion object {
         const val HEADER_SIZE = 8
+        private const val DESTINATION_PORT_OFFSET = 2
+        private const val LENGTH_OFFSET = 4
+        private const val CHECKSUM_OFFSET = 6
+        private const val NO_CHECKSUM_SUBSTITUTE = 0xFFFF
 
         /**
          * Parsea un datagrama UDP a partir de los bytes del payload de un paquete IP.
@@ -109,10 +115,11 @@ data class UdpPacket(
             if (length < udpLength || udpLength < HEADER_SIZE) return null
 
             val payloadLength = udpLength - HEADER_SIZE
+            // Única copia del camino de subida: el datagrama se envía después desde otro hilo.
             val payload = if (payloadLength > 0) {
                 data.copyOfRange(offset + HEADER_SIZE, offset + udpLength)
             } else {
-                ByteArray(0)
+                PacketBytes.EMPTY
             }
 
             return UdpPacket(

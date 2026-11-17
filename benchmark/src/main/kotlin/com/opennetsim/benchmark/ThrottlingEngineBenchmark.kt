@@ -39,8 +39,7 @@ class ThrottlingEngineBenchmark {
             clock
         )
         packet = TcpPacket.buildPshAck(CLIENT_PORT, SERVER_PORT, 1L, 1L, ByteArray(PAYLOAD_BYTES))
-            .toIpPacket(IpPacket.parseIp("10.0.0.2"), IpPacket.parseIp("93.184.216.34"))
-            .toByteArray()
+            .toIpBytes(IpPacket.parseIp("10.0.0.2"), IpPacket.parseIp("93.184.216.34"))
         flowId = PacketMeta.parse(packet)?.flowId ?: 0L
     }
 

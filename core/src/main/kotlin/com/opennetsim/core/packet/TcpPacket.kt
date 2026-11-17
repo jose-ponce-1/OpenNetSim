@@ -1,7 +1,5 @@
 package com.opennetsim.core.packet
 
-import java.nio.ByteBuffer
-
 /**
  * Representación, parser y constructor de segmentos TCP (RFC 793).
  */
@@ -15,8 +13,8 @@ data class TcpPacket(
     val windowSize: Int = 65535,
     val checksum: Int = 0,
     val urgentPointer: Int = 0,
-    val options: ByteArray = ByteArray(0),
-    val payload: ByteArray = ByteArray(0)
+    val options: ByteArray = PacketBytes.EMPTY,
+    val payload: ByteArray = PacketBytes.EMPTY
 ) {
     val isFin: Boolean get() = (flags and FLAG_FIN) != 0
     val isSyn: Boolean get() = (flags and FLAG_SYN) != 0
@@ -33,61 +31,45 @@ data class TcpPacket(
         get() = payload.size.toLong() + (if (isSyn) 1L else 0L) + (if (isFin) 1L else 0L)
 
     /**
-     * Serializa la cabecera TCP, opciones y payload, calculando el checksum con la pseudo-cabecera IPv4.
+     * Serializa la cabecera TCP, opciones y payload, calculando el checksum con la pseudo-cabecera IPv4
+     * o IPv6 según el tamaño de [srcIp].
      */
-    fun toByteArray(srcIp: ByteArray, dstIp: ByteArray): ByteArray {
-        val headerLength = dataOffset * 4
-        val totalLength = headerLength + payload.size
-        val buffer = ByteBuffer.allocate(totalLength)
+    fun toByteArray(srcIp: ByteArray, dstIp: ByteArray): ByteArray =
+        ByteArray(dataOffset * WORD_BYTES + payload.size).also { writeTo(it, 0, srcIp, dstIp) }
 
-        buffer.putShort(sourcePort.toShort())
-        buffer.putShort(destinationPort.toShort())
-        buffer.putInt((sequenceNumber and 0xFFFFFFFFL).toInt())
-        buffer.putInt((acknowledgmentNumber and 0xFFFFFFFFL).toInt())
+    /**
+     * Paquete IP completo (IPv4 o IPv6 según el tamaño de las direcciones) listo para el TUN, en un único
+     * array: el camino de bajada no crea el segmento por separado para copiarlo después.
+     */
+    fun toIpBytes(srcIp: ByteArray, dstIp: ByteArray): ByteArray {
+        val out = IpFraming.allocate(srcIp, dstIp, IpPacket.PROTOCOL_TCP, dataOffset * WORD_BYTES + payload.size)
+        writeTo(out, IpFraming.headerSize(srcIp), srcIp, dstIp)
+        return out
+    }
 
-        // Data Offset (4 bits) + Reserved (4 bits = 0)
-        val dataOffsetByte = (dataOffset and 0x0F) shl 4
-        buffer.put(dataOffsetByte.toByte())
-
-        // Flags (8 bits)
-        buffer.put((flags and 0xFF).toByte())
-
-        // Window size
-        buffer.putShort(windowSize.toShort())
-
-        // Checksum inicializado a 0
-        buffer.putShort(0.toShort())
-
-        // Urgent Pointer
-        buffer.putShort(urgentPointer.toShort())
-
-        // Options (si las hay)
-        if (options.isNotEmpty()) {
-            buffer.put(options)
-            // Padding a múltiplo de 4 bytes si hace falta
-            val padding = (dataOffset * 4) - 20 - options.size
-            if (padding > 0) {
-                buffer.put(ByteArray(padding))
-            }
-        }
-
-        // Payload
-        buffer.position(headerLength)
-        buffer.put(payload)
-
-        val segmentData = buffer.array()
-        val calculatedChecksum = ChecksumUtils.calculateTransportChecksum(
+    /** Escribe el segmento con su checksum en [out] desde [offset]; ese tramo de [out] debe estar a cero. */
+    private fun writeTo(out: ByteArray, offset: Int, srcIp: ByteArray, dstIp: ByteArray) {
+        val headerLength = dataOffset * WORD_BYTES
+        PacketBytes.writeU16(out, offset, sourcePort)
+        PacketBytes.writeU16(out, offset + DESTINATION_PORT_OFFSET, destinationPort)
+        PacketBytes.writeU32(out, offset + SEQUENCE_OFFSET, sequenceNumber)
+        PacketBytes.writeU32(out, offset + ACK_OFFSET, acknowledgmentNumber)
+        out[offset + DATA_OFFSET_OFFSET] = ((dataOffset and LOW_NIBBLE_MASK) shl NIBBLE_BITS).toByte()
+        out[offset + FLAGS_OFFSET] = flags.toByte()
+        PacketBytes.writeU16(out, offset + WINDOW_OFFSET, windowSize)
+        PacketBytes.writeU16(out, offset + URGENT_OFFSET, urgentPointer)
+        // Las opciones ocupan desde el byte 20; el relleno hasta dataOffset ya está a cero.
+        System.arraycopy(options, 0, out, offset + HEADER_MIN_SIZE, options.size)
+        System.arraycopy(payload, 0, out, offset + headerLength, payload.size)
+        val checksum = ChecksumUtils.calculateTransportChecksum(
             srcIp = srcIp,
             dstIp = dstIp,
             protocol = IpPacket.PROTOCOL_TCP,
-            segmentData = segmentData,
-            offset = 0,
-            length = totalLength
+            segmentData = out,
+            offset = offset,
+            length = headerLength + payload.size
         )
-
-        buffer.putShort(16, calculatedChecksum.toShort())
-
-        return segmentData
+        PacketBytes.writeU16(out, offset + CHECKSUM_OFFSET, checksum)
     }
 
     /**
@@ -160,6 +142,18 @@ data class TcpPacket(
 
         const val HEADER_MIN_SIZE = 20
 
+        private const val WORD_BYTES = 4
+        private const val LOW_NIBBLE_MASK = 0x0F
+        private const val NIBBLE_BITS = 4
+        private const val DESTINATION_PORT_OFFSET = 2
+        private const val SEQUENCE_OFFSET = 4
+        private const val ACK_OFFSET = 8
+        private const val DATA_OFFSET_OFFSET = 12
+        private const val FLAGS_OFFSET = 13
+        private const val WINDOW_OFFSET = 14
+        private const val CHECKSUM_OFFSET = 16
+        private const val URGENT_OFFSET = 18
+
         /**
          * Parsea un segmento TCP a partir de los bytes del payload de un paquete IP.
          */
@@ -196,14 +190,15 @@ data class TcpPacket(
             val options = if (optionsLength > 0) {
                 data.copyOfRange(offset + HEADER_MIN_SIZE, offset + headerLength)
             } else {
-                ByteArray(0)
+                PacketBytes.EMPTY
             }
 
             val payloadLength = length - headerLength
+            // Única copia del camino de subida: el búfer de recepción guarda y entrega este array.
             val payload = if (payloadLength > 0) {
                 data.copyOfRange(offset + headerLength, offset + length)
             } else {
-                ByteArray(0)
+                PacketBytes.EMPTY
             }
 
             return TcpPacket(

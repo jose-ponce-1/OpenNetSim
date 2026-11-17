@@ -121,7 +121,8 @@ Decisiones del usuario (17/11/2026), tomadas comparando con `tc netem`, Network 
 ### Fase 13: Rendimiento y deuda (paso 5 de la hoja de ruta)
 - [x] `clamp-outer-receive-window` (PR #11): cola sin leer de los sockets TCP exteriores acotada; archivado.
 - [x] `add-kover-coverage` (rama `chore/kover-coverage`): Kover 0.9.11, informe conjunto de `:app` y `:core` sin el código que solo corre con Android o Compose. Medido: 87,6 % de líneas (66,3 % de ramas); `:core`, 86,7 %. Mínimo del 85 % de líneas en la CI.
-- [x] `add-packet-microbenchmark` (rama `perf/packet-microbenchmark`): módulo `:benchmark` (kotlinx-benchmark/JMH) del camino de cada paquete. Medido en la JVM con un segmento de 1460 B: subida ~0,65 µs, bajada ~1,35 µs (~1 % de un núcleo a 100 Mbps) y ~2,2 veces el tamaño del paquete en memoria reservada por las copias. Conclusión: no hace falta optimizar; si hiciera falta, parseo sin copias, serialización en un solo array y checksum por palabras de 32 bits.
+- [x] `add-packet-microbenchmark` (rama `perf/packet-microbenchmark`): módulo `:benchmark` (kotlinx-benchmark/JMH) del camino de cada paquete. Medido en la JVM con un segmento de 1460 B: subida ~0,65 µs, bajada ~1,35 µs (~1 % de un núcleo a 100 Mbps) y ~2,2 veces el tamaño del paquete en memoria reservada por las copias. Conclusión: no hace falta optimizar a las velocidades simuladas, pero el usuario pidió aplicar las mejoras.
+- [x] `optimize-packet-path` (misma rama): payload IP como vista sin copia, serialización IP + transporte en un único array (`toIpBytes`) y checksum con `ByteBuffer.getLong`. Medido antes/después (JVM, segmento de 1460 B): subida 434 → 224 ns, bajada 861 → 224 ns, checksum 362 → 40 ns, memoria por paquete −50 %. Bytes idénticos a los de antes (`PacketCodecEquivalenceTest`). Pendiente: CI y verificación en dispositivo.
 
 ---
 
@@ -140,7 +141,7 @@ Decisiones del usuario (17/11/2026), tomadas comparando con `tc netem`, Network 
 ---
 
 ## Punto de Retorno (Checkpoint)
-- **Últimos archivos modificados:** `benchmark/` (nuevo), `settings.gradle.kts`, `build.gradle.kts`, `gradle/libs.versions.toml`, `.github/workflows/ci.yml`, `openspec/config.yaml`, README y `openspec/changes/add-packet-microbenchmark` (rama `perf/packet-microbenchmark`, apilada sobre `chore/kover-coverage`).
+- **Últimos archivos modificados:** `IpPacket`, `Ipv6Packet`, `TcpPacket`, `UdpPacket`, `ChecksumUtils`, `PacketBytes`, `IpFraming`, los tres forwarders, `PacketCodecEquivalenceTest`, `benchmark/` y `openspec/changes/{add-packet-microbenchmark,optimize-packet-path}` (rama `perf/packet-microbenchmark`, apilada sobre `chore/kover-coverage`).
 - **Estado General:** Fases 1–11 en `develop` y `main`; Fase 12 en `develop` (PR #10). Cambio `clamp-outer-receive-window` en `develop` (PR #11) y archivado. Cambio `add-kover-coverage` con CI en verde (PR #12), pendiente de fusionar. Cambio `add-packet-microbenchmark` verificado en local.
 - **Artefacto de Distribución:** APK de depuración en `app/build/outputs/apk/debug/app-debug.apk`; release firmada en `app/build/outputs/apk/release/app-release.apk` (keystore del usuario, fuera del repositorio).
-- **Siguiente acción inmediata:** CI y fusión de `chore/kover-coverage` (PR #12) y de `perf/packet-microbenchmark`; después, baselines de detekt (repetir `allocationBenchmark` tras el refactor de los parsers).
+- **Siguiente acción inmediata:** verificar en dispositivo la release de `perf/packet-microbenchmark` (cambia los forwarders); CI y fusión de los PR #12 y de esta rama; después, baselines de detekt (repetir `allocationBenchmark` tras el refactor de los parsers).

@@ -31,24 +31,27 @@ class PacketCodecBenchmark {
     @Setup
     fun setUp() {
         payload = ByteArray(payloadSize) { it.toByte() }
-        rawPacket = segment().toIpPacket(clientIp, serverIp).toByteArray()
+        rawPacket = segment().toIpBytes(clientIp, serverIp)
     }
 
     /** Clasificación en el motor: cabeceras sin copiar el payload. */
     @Benchmark
     fun classify(): PacketMeta? = PacketMeta.parse(rawPacket)
 
-    /** Subida completa: clasificación al encolar y parseo IP + TCP al drenar hacia el forwarder. */
+    /**
+     * Subida completa: clasificación al encolar y, al drenar, parseo IP (vista sin copia) y TCP desde
+     * la vista, como `TcpForwarder.processOutbound`.
+     */
     @Benchmark
     fun parseUplink(blackhole: Blackhole) {
         blackhole.consume(PacketMeta.parse(rawPacket))
         val ip = IpPacket.parse(rawPacket)
-        blackhole.consume(ip?.let { TcpPacket.parse(it.payload) })
+        blackhole.consume(ip?.let { TcpPacket.parse(it.payloadBuffer, it.payloadOffset, it.payloadSize) })
     }
 
-    /** Bajada: segmento con datos del servidor, serializado con checksum TCP e IPv4. */
+    /** Bajada: segmento con datos del servidor, serializado con sus checksums en un único array. */
     @Benchmark
-    fun buildDownlink(): ByteArray = segment().toIpPacket(serverIp, clientIp).toByteArray()
+    fun buildDownlink(): ByteArray = segment().toIpBytes(serverIp, clientIp)
 
     /** Checksum de Internet sobre el paquete entero, la parte de [buildDownlink] que crece con el tamaño. */
     @Benchmark

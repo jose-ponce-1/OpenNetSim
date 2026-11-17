@@ -79,11 +79,7 @@ class TcpForwarder(
         var removed = false
 
         override fun sendToClient(segment: TcpPacket, kind: SegmentKind, isRetransmission: Boolean) {
-            val packet = if (key.isIpv6) {
-                segment.toIpv6Packet(serverIpBytes, clientIpBytes).toByteArray()
-            } else {
-                segment.toIpPacket(serverIpBytes, clientIpBytes).toByteArray()
-            }
+            val packet = segment.toIpBytes(serverIpBytes, clientIpBytes)
             // Paquetes completos, como los cuenta el motor, para restarlos del caudal de bajada.
             if (isRetransmission) retransmittedBytesCounter.addAndGet(packet.size.toLong())
             if (kind == SegmentKind.CONTROL) onControlPacket(packet) else onInboundPacket(packet)
@@ -220,7 +216,7 @@ class TcpForwarder(
             ipPacket.destinationIp,
             ipPacket.sourceIpString,
             ipPacket.destinationIpString,
-            ipPacket.payload,
+            TcpPacket.parse(ipPacket.payloadBuffer, ipPacket.payloadOffset, ipPacket.payloadSize),
             false
         )
     }
@@ -234,7 +230,7 @@ class TcpForwarder(
             ipv6Packet.destinationIp,
             ipv6Packet.sourceIpString,
             ipv6Packet.destinationIpString,
-            ipv6Packet.payload,
+            TcpPacket.parse(ipv6Packet.payloadBuffer, ipv6Packet.payloadOffset, ipv6Packet.payloadSize),
             true
         )
     }
@@ -245,11 +241,11 @@ class TcpForwarder(
         dstIpBytes: ByteArray,
         srcIpString: String,
         dstIpString: String,
-        payload: ByteArray,
+        segment: TcpPacket?,
         isIpv6: Boolean
     ) {
         if (!isRunning) return
-        val tcp = TcpPacket.parse(payload) ?: return
+        val tcp = segment ?: return
         val key = SessionKey(srcIpString, tcp.sourcePort, dstIpString, tcp.destinationPort, isIpv6)
         // Modelo actor: el estado de la sesión solo se toca en el hilo del selector.
         taskQueue.post { handleClientSegment(key, srcIpBytes, dstIpBytes, tcp) }
@@ -266,7 +262,7 @@ class TcpForwarder(
                 openSession(key, clientIp, serverIp, tcp, now)
             } else {
                 // Segmento de una sesión que ya no existe (p. ej. conexión del pool expirada): RST.
-                TcpPacket.buildRstForSegment(tcp)?.let { sendDetached(key, clientIp, serverIp, it) }
+                TcpPacket.buildRstForSegment(tcp)?.let { sendDetached(clientIp, serverIp, it) }
             }
             return
         }
@@ -295,7 +291,7 @@ class TcpForwarder(
             "tcp.limit",
             "Límite de $maxSessions conexiones TCP: se rechaza ${describe(key)} con RST (rechazos: $total)"
         )
-        TcpPacket.buildRstForSegment(syn)?.let { sendDetached(key, clientIp, serverIp, it) }
+        TcpPacket.buildRstForSegment(syn)?.let { sendDetached(clientIp, serverIp, it) }
     }
 
     private fun connectSession(key: SessionKey, clientIp: ByteArray, serverIp: ByteArray, syn: TcpPacket, now: Long) {
@@ -303,13 +299,13 @@ class TcpForwarder(
             SocketChannel.open().apply { configureBlocking(false) }
         } catch (e: IOException) {
             diagnostics.warn("tcp.open", "No se pudo crear el socket TCP hacia ${describe(key)}", e)
-            TcpPacket.buildRstForSegment(syn)?.let { sendDetached(key, clientIp, serverIp, it) }
+            TcpPacket.buildRstForSegment(syn)?.let { sendDetached(clientIp, serverIp, it) }
             return
         }
         if (!environment.socketProtector.protect(channel.socket())) {
             diagnostics.warn("tcp.protect", "protect() rechazó el socket TCP hacia ${describe(key)}")
             closeChannelQuietly(channel)
-            TcpPacket.buildRstForSegment(syn)?.let { sendDetached(key, clientIp, serverIp, it) }
+            TcpPacket.buildRstForSegment(syn)?.let { sendDetached(clientIp, serverIp, it) }
             return
         }
 
@@ -339,13 +335,8 @@ class TcpForwarder(
     }
 
     /** Envía un segmento de control que no pertenece a ninguna sesión (RST de respuesta). */
-    private fun sendDetached(key: SessionKey, clientIp: ByteArray, serverIp: ByteArray, segment: TcpPacket) {
-        val packet = if (key.isIpv6) {
-            segment.toIpv6Packet(serverIp, clientIp).toByteArray()
-        } else {
-            segment.toIpPacket(serverIp, clientIp).toByteArray()
-        }
-        onControlPacket(packet)
+    private fun sendDetached(clientIp: ByteArray, serverIp: ByteArray, segment: TcpPacket) {
+        onControlPacket(segment.toIpBytes(serverIp, clientIp))
     }
 
     /** Tras cada evento: aplicar fallos de I/O diferidos y reanudar lecturas si hay ventana. */

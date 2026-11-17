@@ -123,7 +123,7 @@ class UdpForwarder(
             dstIpBytes = ipPacket.destinationIp,
             srcIpString = ipPacket.sourceIpString,
             dstIpString = ipPacket.destinationIpString,
-            payload = ipPacket.payload,
+            datagram = UdpPacket.parse(ipPacket.payloadBuffer, ipPacket.payloadOffset, ipPacket.payloadSize),
             isIpv6 = false
         )
     }
@@ -137,7 +137,7 @@ class UdpForwarder(
             dstIpBytes = ipv6Packet.destinationIp,
             srcIpString = ipv6Packet.sourceIpString,
             dstIpString = ipv6Packet.destinationIpString,
-            payload = ipv6Packet.payload,
+            datagram = UdpPacket.parse(ipv6Packet.payloadBuffer, ipv6Packet.payloadOffset, ipv6Packet.payloadSize),
             isIpv6 = true
         )
     }
@@ -148,12 +148,12 @@ class UdpForwarder(
         dstIpBytes: ByteArray,
         srcIpString: String,
         dstIpString: String,
-        payload: ByteArray,
+        datagram: UdpPacket?,
         isIpv6: Boolean
     ) {
         if (!isRunning) return
 
-        val udp = UdpPacket.parse(payload) ?: return
+        val udp = datagram ?: return
         val key = SessionKey(
             clientIp = srcIpString,
             clientPort = udp.sourcePort,
@@ -200,11 +200,7 @@ class UdpForwarder(
             length = UdpPacket.HEADER_SIZE + payload.size,
             payload = payload
         )
-        val originalBytes = if (key.isIpv6) {
-            original.toIpv6Packet(clientIpBytes, serverIpBytes).toByteArray()
-        } else {
-            original.toIpPacket(clientIpBytes, serverIpBytes).toByteArray()
-        }
+        val originalBytes = original.toIpBytes(clientIpBytes, serverIpBytes)
         onInboundPacket(
             IcmpUnreachable.buildIpPacket(
                 originalPacket = originalBytes,
@@ -325,13 +321,7 @@ class UdpForwarder(
                     payload = payload
                 )
 
-                val packetBytes = if (session.key.isIpv6) {
-                    responseUdp.toIpv6Packet(session.serverIpBytes, session.clientIpBytes).toByteArray()
-                } else {
-                    responseUdp.toIpPacket(session.serverIpBytes, session.clientIpBytes).toByteArray()
-                }
-
-                onInboundPacket(packetBytes)
+                onInboundPacket(responseUdp.toIpBytes(session.serverIpBytes, session.clientIpBytes))
             }
         } catch (e: IOException) {
             diagnostics.warn("udp.read", "Fallo al recibir de ${describe(session.key)}: ${e.message}", e)
