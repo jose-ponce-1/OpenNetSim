@@ -6,7 +6,7 @@
 
 ## 2. Firma
 - [x] 2.1 Leer la firma de las propiedades `openNetSimRelease*`; verificar con un keystore desechable que `apksigner verify` acepta el APK y que, sin propiedades, se genera `app-release-unsigned.apk`
-- [ ] 2.2 Crear el keystore de release (usuario, fuera del repositorio) y configurar sus propiedades; verificar que `:app:assembleRelease` genera `app-release.apk` firmado con él
+- [x] 2.2 Crear el keystore de release (usuario, fuera del repositorio) y configurar sus propiedades; verificar que `:app:assembleRelease` genera `app-release.apk` firmado con él
 
 ## 3. Interfaz
 - [x] 3.1 Icono `ic_stat_opennetsim` en la notificación; verificar con `assembleDebug`

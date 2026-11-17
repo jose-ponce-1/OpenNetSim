@@ -114,7 +114,8 @@ Decisiones del usuario (17/11/2026), tomadas comparando con `tc netem`, Network 
 - [x] R8 y reducción de recursos en release (APK de 16,6 MB a ~1 MB); `ThrottlePreset` conservado porque se guarda por su nombre. La CI compila la release.
 - [x] Firma desde propiedades de Gradle `openNetSimRelease*` fuera del repositorio; sin ellas, release sin firmar.
 - [x] Icono propio en la notificación y texto de la tarjeta informativa corregido.
-- [ ] Keystore de release (lo crea el usuario), CI y verificación en dispositivo de la release firmada.
+- [x] Keystore de release creado por el usuario fuera del repositorio; `app-release.apk` firmado (RSA 4096, esquema v2).
+- [ ] CI y verificación en dispositivo de la release firmada.
 
 ---
 
@@ -135,4 +136,4 @@ Decisiones del usuario (17/11/2026), tomadas comparando con `tc netem`, Network 
 - **Últimos archivos modificados:** `app/build.gradle.kts`, `app/proguard-rules.pro`, `ic_stat_opennetsim.xml`, `TunnelNotifications.kt`, `ThrottleDashboardScreen.kt`, `.github/workflows/ci.yml` y documentación (Fase 12, rama `feat/release-prep`).
 - **Estado General:** Fases 1–11 cerradas, verificadas en dispositivo y fusionadas en `develop` (PR #5, #6 y #7); `main` sigue sin estos cambios.
 - **Artefacto de Distribución:** APK de depuración en `app/build/outputs/apk/debug/app-debug.apk`.
-- **Siguiente acción inmediata:** crear el keystore de release y verificar la release firmada en dispositivo (Fase 12); después, el paso 5 de la hoja de ruta.
+- **Siguiente acción inmediata:** verificar la release firmada en dispositivo (Fase 12); después, el paso 5 de la hoja de ruta.
