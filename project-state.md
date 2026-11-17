@@ -105,10 +105,10 @@ Decisiones del usuario (17/11/2026), tomadas comparando con `tc netem`, Network 
 - [x] CI de GitHub Actions en verde con los dos módulos (PR #6); cambio archivado.
 - [x] La CI destapó una carrera en `UdpForwarder.close()` y `TcpForwarder.close()` (cerraban el selector desde otro hilo: NullPointerException del JDK en `AbstractSelector.deregister`). Ahora, como en `IcmpForwarder`, se libera todo en el hilo del bucle; test de estrés añadido. Verificado en dispositivo.
 
-### Fase 11: Actualización de AGP, Kotlin y detekt (cambio OpenSpec `upgrade-toolchain`, rama `chore/toolchain-upgrade`)
+### Fase 11: Actualización de AGP, Kotlin y detekt (cambio OpenSpec `upgrade-toolchain`, PR #7)
 - [x] AGP 8.7.3 → 9.3.3, Kotlin 2.0.21 → 2.4.21 (Kotlin integrado de AGP 9, sin `kotlin-android`), detekt 1.23.7 → 1.23.8; Gradle 9.7.1 se mantiene. Combinación dentro de las matrices oficiales.
 - [x] 176 tests (1 omitido en Windows), `detekt`, `lintDebug` y `assembleDebug` en verde.
-- [ ] CI de GitHub Actions en verde y verificación en dispositivo; después, archivar el cambio.
+- [x] CI de GitHub Actions en verde y verificación en dispositivo; cambio archivado.
 
 ---
 
@@ -126,7 +126,7 @@ Decisiones del usuario (17/11/2026), tomadas comparando con `tc netem`, Network 
 ---
 
 ## Punto de Retorno (Checkpoint)
-- **Últimos archivos modificados:** `gradle/libs.versions.toml`, `build.gradle.kts`, `app/build.gradle.kts`, `IcmpEchoTransport.kt`, README y `openspec/changes/upgrade-toolchain/` (Fase 11, rama `chore/toolchain-upgrade`, que parte de `refactor/core-module`).
-- **Estado General:** Fases 1–9 cerradas y fusionadas en `develop`; Fase 10 verificada (local, CI y dispositivo), pendiente de fusionar (PR #6). Fase 11 verificada en local.
+- **Últimos archivos modificados:** `gradle/libs.versions.toml`, `build.gradle.kts`, `app/build.gradle.kts`, `IcmpEchoTransport.kt`, README y `openspec/changes/archive/` (Fase 11).
+- **Estado General:** Fases 1–11 cerradas, verificadas en dispositivo y fusionadas en `develop` (PR #5, #6 y #7); `main` sigue sin estos cambios.
 - **Artefacto de Distribución:** APK de depuración en `app/build/outputs/apk/debug/app-debug.apk`.
-- **Siguiente acción inmediata:** fusionar el PR #6; CI y verificación en dispositivo de la Fase 11; después, el paso 4 de la hoja de ruta (preparar la release).
+- **Siguiente acción inmediata:** el paso 4 de la hoja de ruta (preparar la release).

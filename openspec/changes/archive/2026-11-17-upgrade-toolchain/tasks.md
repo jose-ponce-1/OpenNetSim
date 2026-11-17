@@ -11,5 +11,5 @@
 ## 3. Calidad
 - [x] 3.1 Verificar que detekt 1.23.8 analiza con AGP 9 (marca un archivo de prueba con problemas) y que `detekt` termina con código 0
 - [x] 3.2 Ejecutar `lintDebug`, `:core:test`, `:app:testDebugUnitTest` (176, 1 omitido en Windows) y `assembleDebug`; verificar que terminan bien
-- [ ] 3.3 Verificar que la CI de GitHub Actions termina en verde
-- [ ] 3.4 Verificar en dispositivo: activar y detener el túnel, navegar, ping y cambios de configuración con tráfico
+- [x] 3.3 Verificar que la CI de GitHub Actions termina en verde
+- [x] 3.4 Verificar en dispositivo: activar y detener el túnel, navegar, ping y cambios de configuración con tráfico
