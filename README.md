@@ -50,7 +50,7 @@ OpenNetSim/
 ## 🛠️ Requirements & Build
 
 - **Android SDK:** Min SDK 26 (Android 8.0) / Target SDK 34 (Android 14)
-- **Language:** Kotlin 2.0+
+- **Language:** Kotlin 2.4 (built-in Kotlin of Android Gradle Plugin 9)
 - **Build System:** Gradle (Kotlin DSL) with a version catalog (`gradle/libs.versions.toml`)
 
 ### Verification Commands

@@ -105,12 +105,17 @@ Decisiones del usuario (17/11/2026), tomadas comparando con `tc netem`, Network 
 - [x] CI de GitHub Actions en verde con los dos módulos (PR #6); cambio archivado.
 - [x] La CI destapó una carrera en `UdpForwarder.close()` y `TcpForwarder.close()` (cerraban el selector desde otro hilo: NullPointerException del JDK en `AbstractSelector.deregister`). Ahora, como en `IcmpForwarder`, se libera todo en el hilo del bucle; test de estrés añadido. Verificado en dispositivo.
 
+### Fase 11: Actualización de AGP, Kotlin y detekt (cambio OpenSpec `upgrade-toolchain`, rama `chore/toolchain-upgrade`)
+- [x] AGP 8.7.3 → 9.3.3, Kotlin 2.0.21 → 2.4.21 (Kotlin integrado de AGP 9, sin `kotlin-android`), detekt 1.23.7 → 1.23.8; Gradle 9.7.1 se mantiene. Combinación dentro de las matrices oficiales.
+- [x] 176 tests (1 omitido en Windows), `detekt`, `lintDebug` y `assembleDebug` en verde.
+- [ ] CI de GitHub Actions en verde y verificación en dispositivo; después, archivar el cambio.
+
 ---
 
 ## Hoja de Ruta
 1. ~~Fidelidad de la simulación~~ (Fase 9).
 2. ~~Módulo `:core` y version catalog~~ (Fase 10).
-3. Actualizar AGP, Kotlin y Gradle (Gradle 9.7.1 está fuera de la matriz probada de AGP 8.7 y avisa de incompatibilidades con Gradle 10), comprobando antes la matriz de compatibilidad.
+3. ~~Actualizar AGP, Kotlin y Gradle~~ (Fase 11). Queda un aviso de Gradle 10 que viene del plugin de detekt 1.23.8: se resuelve con detekt 2.0 cuando sea estable. Pendiente aparte: Compose BOM, AndroidX y corrutinas.
 4. Preparar la release: R8, firma, icono propio en la notificación y corregir el texto de la tarjeta informativa ("No se envían paquetes fuera de tu dispositivo" no es cierto).
 5. Rendimiento y deuda: microbenchmark del camino de cada paquete antes de optimizar, reducir las baselines de detekt y medir cobertura con Kover.
 6. Nueva interfaz (pedido por el usuario el 17/11/2026):
@@ -121,7 +126,7 @@ Decisiones del usuario (17/11/2026), tomadas comparando con `tc netem`, Network 
 ---
 
 ## Punto de Retorno (Checkpoint)
-- **Últimos archivos modificados:** `core/` (módulo nuevo con `core.*` y `model.*`), `gradle/libs.versions.toml`, `build.gradle.kts`, `app/build.gradle.kts`, `settings.gradle.kts`, `config/detekt/`, `.github/workflows/ci.yml` y documentación (Fase 10, rama `refactor/core-module`, PR #6).
-- **Estado General:** Fases 1–9 cerradas y fusionadas en `develop`; Fase 10 verificada (local, CI y dispositivo), pendiente de fusionar (PR #6).
+- **Últimos archivos modificados:** `gradle/libs.versions.toml`, `build.gradle.kts`, `app/build.gradle.kts`, `IcmpEchoTransport.kt`, README y `openspec/changes/upgrade-toolchain/` (Fase 11, rama `chore/toolchain-upgrade`, que parte de `refactor/core-module`).
+- **Estado General:** Fases 1–9 cerradas y fusionadas en `develop`; Fase 10 verificada (local, CI y dispositivo), pendiente de fusionar (PR #6). Fase 11 verificada en local.
 - **Artefacto de Distribución:** APK de depuración en `app/build/outputs/apk/debug/app-debug.apk`.
-- **Siguiente acción inmediata:** fusionar el PR #6; después, el paso 3 de la hoja de ruta (actualizar AGP/Kotlin/Gradle).
+- **Siguiente acción inmediata:** fusionar el PR #6; CI y verificación en dispositivo de la Fase 11; después, el paso 4 de la hoja de ruta (preparar la release).
