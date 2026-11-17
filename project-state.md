@@ -110,13 +110,13 @@ Decisiones del usuario (17/11/2026), tomadas comparando con `tc netem`, Network 
 - [x] 176 tests (1 omitido en Windows), `detekt`, `lintDebug` y `assembleDebug` en verde.
 - [x] CI de GitHub Actions en verde y verificación en dispositivo; cambio archivado.
 
-### Fase 12: Preparar la release (cambio OpenSpec `release-prep`, rama `feat/release-prep`)
+### Fase 12: Preparar la release (cambio OpenSpec `release-prep`, PR #10)
 - [x] R8 y reducción de recursos en release (APK de 16,6 MB a ~1 MB); `ThrottlePreset` conservado porque se guarda por su nombre. La CI compila la release.
 - [x] Firma desde propiedades de Gradle `openNetSimRelease*` fuera del repositorio; sin ellas, release sin firmar.
 - [x] Icono propio en la notificación y texto de la tarjeta informativa corregido.
 - [x] Keystore de release creado por el usuario fuera del repositorio; `app-release.apk` firmado (RSA 4096, esquema v2).
 - [x] Release firmada verificada en dispositivo (túnel, cambios en caliente, configuración conservada, icono).
-- [ ] CI en verde; después, archivar el cambio.
+- [x] CI en verde (incluye la compilación de release con R8, PR #10); cambio archivado.
 
 ---
 
@@ -136,6 +136,6 @@ Decisiones del usuario (17/11/2026), tomadas comparando con `tc netem`, Network 
 
 ## Punto de Retorno (Checkpoint)
 - **Últimos archivos modificados:** `app/build.gradle.kts`, `app/proguard-rules.pro`, `ic_stat_opennetsim.xml`, `TunnelNotifications.kt`, `ThrottleDashboardScreen.kt`, `.github/workflows/ci.yml` y documentación (Fase 12, rama `feat/release-prep`).
-- **Estado General:** Fases 1–11 cerradas, verificadas en dispositivo y fusionadas en `develop` (PR #5, #6 y #7); `main` sigue sin estos cambios.
-- **Artefacto de Distribución:** APK de depuración en `app/build/outputs/apk/debug/app-debug.apk`.
-- **Siguiente acción inmediata:** verificar la release firmada en dispositivo (Fase 12); después, el paso 5 de la hoja de ruta.
+- **Estado General:** Fases 1–11 en `develop` y `main`; Fase 12 verificada (local, CI y dispositivo), pendiente de fusionar (PR #10).
+- **Artefacto de Distribución:** APK de depuración en `app/build/outputs/apk/debug/app-debug.apk`; release firmada en `app/build/outputs/apk/release/app-release.apk` (keystore del usuario, fuera del repositorio).
+- **Siguiente acción inmediata:** fusionar el PR #10; después, el paso 5 de la hoja de ruta (empezando por el caso del test de velocidad cancelado).
