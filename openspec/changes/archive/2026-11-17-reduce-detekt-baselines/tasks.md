@@ -13,5 +13,5 @@
 ## 3. Verificación
 - [x] 3.1 Benchmark antes y después con los jars de los dos commits; verificar que la memoria por paquete no cambia y anotar el tiempo en el design (resultado: +2 ns en el parseo TCP, +6 ns en la subida de 64 B, sin diferencia con 1460 B)
 - [x] 3.2 Ejecutar la puerta de calidad completa; verificar que termina bien
-- [ ] 3.3 Verificar que la CI de GitHub Actions termina en verde
-- [ ] 3.4 Verificar en dispositivo con la release (cambian los forwarders): navegar, test de velocidad, QUIC/UDP y ping
+- [x] 3.3 Verificar que la CI de GitHub Actions termina en verde (PR #14)
+- [x] 3.4 Verificar en dispositivo con la release (cambian los forwarders): navegar, test de velocidad, QUIC/UDP y ping (usuario, 17/11/2026: funciona correctamente)
