@@ -15,4 +15,4 @@
 ## 4. Verificación
 - [x] 4.1 Ejecutar `detekt`, `lintDebug`, `:core:test`, `:app:testDebugUnitTest` (176, 1 omitido en Windows) y `assembleDebug`; verificar que terminan bien
 - [ ] 4.2 Verificar que la CI de GitHub Actions termina en verde
-- [ ] 4.3 Verificar en dispositivo la release firmada: túnel, navegación, ping, cambio de preset y configuración conservada al reiniciar la app; icono de la notificación y texto de la tarjeta
+- [x] 4.3 Verificar en dispositivo la release firmada: túnel, navegación, cambios de configuración con tráfico, configuración conservada tras cerrar la app y borrar su caché, e icono de la notificación

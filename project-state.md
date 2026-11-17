@@ -115,7 +115,8 @@ Decisiones del usuario (17/11/2026), tomadas comparando con `tc netem`, Network 
 - [x] Firma desde propiedades de Gradle `openNetSimRelease*` fuera del repositorio; sin ellas, release sin firmar.
 - [x] Icono propio en la notificación y texto de la tarjeta informativa corregido.
 - [x] Keystore de release creado por el usuario fuera del repositorio; `app-release.apk` firmado (RSA 4096, esquema v2).
-- [ ] CI y verificación en dispositivo de la release firmada.
+- [x] Release firmada verificada en dispositivo (túnel, cambios en caliente, configuración conservada, icono).
+- [ ] CI en verde; después, archivar el cambio.
 
 ---
 
@@ -125,6 +126,7 @@ Decisiones del usuario (17/11/2026), tomadas comparando con `tc netem`, Network 
 3. ~~Actualizar AGP, Kotlin y Gradle~~ (Fase 11). Queda un aviso de Gradle 10 que viene del plugin de detekt 1.23.8: se resuelve con detekt 2.0 cuando sea estable. Pendiente aparte: Compose BOM, AndroidX y corrutinas.
 4. ~~Preparar la release~~ (Fase 12).
 5. Rendimiento y deuda: microbenchmark del camino de cada paquete antes de optimizar, reducir las baselines de detekt y medir cobertura con Kover.
+   - Investigar (observado por el usuario el 17/11/2026 con la release): si se cancela el test de velocidad de Google a medias y se repite enseguida, mide menos de lo configurado; si se deja terminar, el siguiente es normal. Hipótesis por comprobar: datos de las conexiones canceladas que siguen en la cola del motor o en los búferes del forwarder TCP y consumen el ancho de banda hasta vaciarse.
 6. Nueva interfaz (pedido por el usuario el 17/11/2026):
    - Sustituir los sliders por campos para escribir el valor exacto (ancho de banda en kbps/Mbps, como otras apps; también latencia, jitter y porcentajes).
    - Paleta de colores oficial de OpenNetSim. Colores del logo encontrados en `res/drawable` (pendientes de que el usuario confirme los oficiales o envíe prototipos): `#0067C6`, `#00C4FF`, `#67E8F9` y `#FFFFFF`.
