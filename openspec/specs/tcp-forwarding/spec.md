@@ -130,12 +130,22 @@ subida los libera y sin ejecución concurrente sobre el estado de esa sesión.
 - **THEN** se procesan uno tras otro y el estado de secuencia de la sesión es coherente con ambos
 
 ### Requirement: Recepción del socket exterior sin tope artificial
-El búfer de recepción del socket exterior SHALL ser suficiente para el caudal de bajada configurado
-con la latencia real del camino, de modo que no sea el factor limitante del caudal.
+El socket exterior SHALL NOT limitar el caudal de bajada configurado con la latencia real del camino.
+Los datos pendientes de cada socket exterior (sin leer o en vuelo desde el servidor) SHALL quedar
+acotados a caudal de bajada × (latencia + jitter + ventana de cola del motor), también en las
+conexiones abiertas cuando cambia la configuración.
 
 #### Scenario: Perfil de 5 Mbps con servidor a 80 ms
 - **WHEN** el perfil configura 5 Mbps de bajada y el servidor real está a 80 ms de RTT
 - **THEN** el socket exterior no limita el caudal por debajo de los 5 Mbps configurados
+
+#### Scenario: Descarga con el motor de bajada saturado
+- **WHEN** el perfil configura 10 Mbps de bajada sin latencia y una descarga llena la cola del motor
+- **THEN** los datos sin leer en cada socket exterior no superan aproximadamente el tope de 625 KB (0,5 s a 10 Mbps)
+
+#### Scenario: Cambio de velocidad con la conexión abierta
+- **WHEN** se cambia la velocidad de bajada configurada durante una descarga
+- **THEN** el tope de esa conexión se ajusta al nuevo valor sin esperar a conexiones nuevas
 
 ### Requirement: Inactividad de conexiones establecidas
 Una conexión TCP establecida SHALL mantenerse abierta al menos 2 h 4 min sin tráfico antes de

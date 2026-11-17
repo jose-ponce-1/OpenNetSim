@@ -1,11 +1,8 @@
 <?xml version="1.0" ?>
 <SmellBaseline>
-  <ManuallySuppressedIssues></ManuallySuppressedIssues>
+  <ManuallySuppressedIssues/>
   <CurrentIssues>
-    <ID>LongMethod:TcpForwarderTest.kt$TcpForwarderTest$@Test fun testOutOfOrderSegmentBufferingAndAssembly()</ID>
     <ID>LongParameterList:ThrottleDashboardScreen.kt$( label: String, icon: ImageVector?, valueDisplay: String, value: Float, range: ClosedFloatingPointRange&lt;Float&gt;, onValueChange: (Float) -&gt; Unit, accentColor: Color = CyanPrimary )</ID>
-    <ID>LoopWithTooManyJumpStatements:TcpForwarder.kt$TcpForwarder$while</ID>
-    <ID>LoopWithTooManyJumpStatements:UdpForwarder.kt$UdpForwarder$while</ID>
     <ID>MagicNumber:Color.kt$0xFF06B6D4</ID>
     <ID>MagicNumber:Color.kt$0xFF0A0E17</ID>
     <ID>MagicNumber:Color.kt$0xFF0F172A</ID>
@@ -21,13 +18,7 @@
     <ID>MagicNumber:Color.kt$0xFFF43F5E</ID>
     <ID>MagicNumber:Color.kt$0xFFF59E0B</ID>
     <ID>MagicNumber:Color.kt$0xFFF8FAFC</ID>
-    <ID>MaxLineLength:ThrottleDashboardScreen.kt$text = "OpenNetSim intercepta el tráfico en un bucle local mediante Android VpnService. No se envían paquetes fuera de tu dispositivo ni se requiere acceso root."</ID>
-    <ID>MaximumLineLength:ThrottleDashboardScreen.kt$ </ID>
-    <ID>NestedBlockDepth:TcpForwarderTest.kt$TcpForwarderTest$@Test fun testOutOfOrderSegmentBufferingAndAssembly()</ID>
     <ID>ParameterNaming:ThrottleDashboardScreen.kt$onPresetSelected</ID>
-    <ID>ReturnCount:UdpForwarder.kt$UdpForwarder$private fun openSession( key: SessionKey, clientIpBytes: ByteArray, serverIpBytes: ByteArray, firstPayload: ByteArray ): Session?</ID>
-    <ID>SwallowedException:TcpForwarder.kt$TcpForwarder$e: ClosedSelectorException</ID>
-    <ID>SwallowedException:UdpForwarder.kt$UdpForwarder$e: ClosedSelectorException</ID>
     <ID>TooManyFunctions:ThrottleDashboardScreen.kt$com.opennetsim.ui.ThrottleDashboardScreen.kt</ID>
   </CurrentIssues>
 </SmellBaseline>

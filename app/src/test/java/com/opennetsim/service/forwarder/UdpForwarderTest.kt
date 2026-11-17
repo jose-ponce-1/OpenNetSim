@@ -100,8 +100,14 @@ class UdpForwarderTest {
             System.nanoTime() - start
         }
 
-        val slowest = callDurationsNanos.maxOrNull() ?: 0L
-        assertTrue("Alta de sesión bloqueó el hilo llamante ${slowest / 1_000_000.0} ms", slowest < 5_000_000L)
+        // Se ignora la llamada más lenta: una pausa del GC o del planificador puede caer en cualquiera
+        // (medido: 12 ms una vez con Kover y la puerta de calidad en paralelo). Si el alta de sesión
+        // bloqueara el hilo, todas las llamadas serían lentas.
+        val secondSlowest = callDurationsNanos.sortedDescending()[1]
+        assertTrue(
+            "Alta de sesión bloqueó el hilo llamante ${secondSlowest / 1_000_000.0} ms",
+            secondSlowest < 5_000_000L
+        )
 
         awaitInbound(20)
         assertEquals(20, inboundTunPackets.size)

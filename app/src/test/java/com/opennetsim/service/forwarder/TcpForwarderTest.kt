@@ -59,111 +59,94 @@ class TcpForwarderTest {
 
     @Test
     fun testOutOfOrderSegmentBufferingAndAssembly() {
-        // 1. Cliente envía SYN
-        val syn = TcpPacket(
-            sourcePort = clientPort,
-            destinationPort = serverPort,
-            sequenceNumber = 1000L,
-            acknowledgmentNumber = 0L,
-            flags = TcpPacket.FLAG_SYN,
-            windowSize = 65535
-        ).toIpPacket(clientIp, serverIp)
-
-        forwarder.processOutbound(syn)
-
-        // Servidor local acepta la conexión
+        // 1. Cliente envía SYN y el servidor local acepta la conexión.
+        forwarder.processOutbound(clientSegment(seq = 1000L, ack = 0L, flags = TcpPacket.FLAG_SYN))
         val acceptedSocket = serverSocket.accept()
         assertNotNull(acceptedSocket)
 
-        // Esperar a que forwarder emita SYN-ACK hacia el TUN
-        var synAckPacket: TcpPacket? = null
-        val deadline = System.currentTimeMillis() + 3000L
-        while (System.currentTimeMillis() < deadline) {
-            val last = inboundTunPackets.lastOrNull()
-            if (last != null) {
-                val ip = IpPacket.parse(last)
-                if (ip != null) {
-                    val tcp = TcpPacket.parse(ip.payload)
-                    if (tcp != null && tcp.isSyn && tcp.isAck) {
-                        synAckPacket = tcp
-                        break
-                    }
-                }
-            }
-            Thread.sleep(20)
-        }
-        assertNotNull("Debe recibir SYN-ACK", synAckPacket)
-        assertEquals(1001L, synAckPacket!!.acknowledgmentNumber)
+        val synAck = awaitSynAck()
+        assertNotNull("Debe recibir SYN-ACK", synAck)
+        assertEquals(1001L, synAck!!.acknowledgmentNumber)
+        val serverAck = synAck.sequenceNumber + 1
 
         // 2. Cliente envía Segmento 2 PRIMERO (out-of-order: seq = 1007, payload = 'World!')
-        val seg2Data = "World!".toByteArray()
-        val seg2 = TcpPacket(
-            sourcePort = clientPort,
-            destinationPort = serverPort,
-            sequenceNumber = 1007L,
-            acknowledgmentNumber = synAckPacket.sequenceNumber + 1,
-            flags = TcpPacket.FLAG_ACK,
-            windowSize = 65535,
-            payload = seg2Data
-        ).toIpPacket(clientIp, serverIp)
-
-        inboundTunPackets.clear()
-        forwarder.processOutbound(seg2)
-
+        val seg2 = clientSegment(seq = 1007L, ack = serverAck, payload = "World!".toByteArray())
         // Debe emitir un ACK repetido con ackNum = 1001 indicando el hueco
-        Thread.sleep(100)
-        val gapAckRaw = inboundTunPackets.lastOrNull()
-        assertNotNull(gapAckRaw)
-        val gapAck = TcpPacket.parse(IpPacket.parse(gapAckRaw!!)!!.payload)!!
-        assertEquals(1001L, gapAck.acknowledgmentNumber)
+        assertEquals(1001L, sendAndAwaitAck(seg2))
 
         // 3. Ahora el cliente envía el Segmento 1 faltante (seq = 1001, payload = 'Hello ')
-        val seg1Data = "Hello ".toByteArray()
-        val seg1 = TcpPacket(
-            sourcePort = clientPort,
-            destinationPort = serverPort,
-            sequenceNumber = 1001L,
-            acknowledgmentNumber = synAckPacket.sequenceNumber + 1,
-            flags = TcpPacket.FLAG_ACK,
-            windowSize = 65535,
-            payload = seg1Data
-        ).toIpPacket(clientIp, serverIp)
-
+        val seg1 = clientSegment(seq = 1001L, ack = serverAck, payload = "Hello ".toByteArray())
         inboundTunPackets.clear()
         forwarder.processOutbound(seg1)
 
         // 4. El servidor físico debe leer ambos segmentos reensamblados en orden contiguo: 'Hello World!'
-        val inputStream: InputStream = acceptedSocket.getInputStream()
-        val receivedBuffer = ByteArray(12)
-        var totalRead = 0
-        while (totalRead < 12 && System.currentTimeMillis() < deadline) {
-            val r = inputStream.read(receivedBuffer, totalRead, 12 - totalRead)
-            if (r > 0) {
-                totalRead += r
-            } else {
-                break
-            }
-        }
-        assertEquals(12, totalRead)
-        assertEquals("Hello World!", String(receivedBuffer))
+        val inputStream = acceptedSocket.getInputStream()
+        assertEquals("Hello World!", String(readExactly(inputStream, 12)))
 
         // 5. El forwarder debe emitir un ACK acumulativo por toda la secuencia (1001 + 6 + 6 = 1013)
         Thread.sleep(100)
-        val cumulativeAckRaw = inboundTunPackets.lastOrNull()
-        assertNotNull(cumulativeAckRaw)
-        val cumulativeAck = TcpPacket.parse(IpPacket.parse(cumulativeAckRaw!!)!!.payload)!!
-        assertEquals(1013L, cumulativeAck.acknowledgmentNumber)
+        assertEquals(1013L, lastEmittedAck())
 
         // 6. Si se retransmite el Segmento 1 duplicado, no debe inyectarse al servidor
-        inboundTunPackets.clear()
-        forwarder.processOutbound(seg1)
-        Thread.sleep(100)
-        val dupAckRaw = inboundTunPackets.lastOrNull()
-        assertNotNull(dupAckRaw)
-        val dupAck = TcpPacket.parse(IpPacket.parse(dupAckRaw!!)!!.payload)!!
-        assertEquals(1013L, dupAck.acknowledgmentNumber)
+        assertEquals(1013L, sendAndAwaitAck(seg1))
         assertEquals("No debe haber datos adicionales en el socket", 0, inputStream.available())
 
         acceptedSocket.close()
+    }
+
+    private fun clientSegment(
+        seq: Long,
+        ack: Long,
+        flags: Int = TcpPacket.FLAG_ACK,
+        payload: ByteArray = ByteArray(0)
+    ): IpPacket = TcpPacket(
+        sourcePort = clientPort,
+        destinationPort = serverPort,
+        sequenceNumber = seq,
+        acknowledgmentNumber = ack,
+        flags = flags,
+        windowSize = 65535,
+        payload = payload
+    ).toIpPacket(clientIp, serverIp)
+
+    /** Último segmento TCP emitido hacia el TUN, si lo hay. */
+    private fun lastEmittedSegment(): TcpPacket? =
+        inboundTunPackets.lastOrNull()?.let { IpPacket.parse(it) }?.let { TcpPacket.parse(it.payload) }
+
+    private fun lastEmittedAck(): Long {
+        val segment = lastEmittedSegment()
+        assertNotNull("Debe emitir un ACK", segment)
+        return segment!!.acknowledgmentNumber
+    }
+
+    /** Envía [segment] y devuelve el número de ACK con el que responde el forwarder. */
+    private fun sendAndAwaitAck(segment: IpPacket): Long {
+        inboundTunPackets.clear()
+        forwarder.processOutbound(segment)
+        Thread.sleep(100)
+        return lastEmittedAck()
+    }
+
+    private fun awaitSynAck(timeoutMs: Long = 3000L): TcpPacket? {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            val segment = lastEmittedSegment()
+            if (segment != null && segment.isSyn && segment.isAck) return segment
+            Thread.sleep(20)
+        }
+        return null
+    }
+
+    private fun readExactly(input: InputStream, count: Int, timeoutMs: Long = 3000L): ByteArray {
+        val buffer = ByteArray(count)
+        val deadline = System.currentTimeMillis() + timeoutMs
+        var totalRead = 0
+        var lastRead = 1
+        while (totalRead < count && lastRead > 0 && System.currentTimeMillis() < deadline) {
+            lastRead = input.read(buffer, totalRead, count - totalRead)
+            if (lastRead > 0) totalRead += lastRead
+        }
+        assertEquals(count, totalRead)
+        return buffer
     }
 }

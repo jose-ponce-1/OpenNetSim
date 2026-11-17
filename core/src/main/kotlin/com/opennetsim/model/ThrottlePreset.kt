@@ -5,6 +5,7 @@ package com.opennetsim.model
  *
  * [packetLossPercent] se aplica por igual a la subida y a la bajada, sin ráfagas ni reordenación.
  */
+@Suppress("LongParameterList") // Cada preset da todos sus valores con nombre; agruparlos no aclara nada.
 enum class ThrottlePreset(
     val displayName: String,
     val description: String,

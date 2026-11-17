@@ -636,7 +636,9 @@ private fun InfoCard() {
             modifier = Modifier.size(20.dp)
         )
         Text(
-            text = "OpenNetSim intercepta el tráfico en un bucle local mediante Android VpnService. No se envían paquetes fuera de tu dispositivo ni se requiere acceso root.",
+            text = "OpenNetSim captura el tráfico con el VpnService de Android y lo reenvía a su destino " +
+                "real desde el propio dispositivo, aplicando las condiciones configuradas. No pasa por " +
+                "ningún servidor externo ni requiere acceso root.",
             style = MaterialTheme.typography.bodyMedium,
             color = Slate400,
             lineHeight = 18.sp

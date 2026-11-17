@@ -4,11 +4,14 @@ plugins {
     alias(libs.plugins.android.application) apply false
     alias(libs.plugins.kotlin.jvm) apply false
     alias(libs.plugins.kotlin.compose) apply false
+    alias(libs.plugins.kotlin.allopen) apply false
+    alias(libs.plugins.kotlinx.benchmark) apply false
     alias(libs.plugins.detekt) apply false
 }
 
-// detekt con la misma configuración en todos los módulos y una baseline por módulo con la deuda previa
-// conocida: toda infracción nueva rompe el build. Regenerar con ./gradlew :<módulo>:detektBaseline.
+// detekt con la misma configuración en todos los módulos. Un módulo con deuda conocida la lista en
+// config/detekt/baseline-<módulo>.xml (hoy solo :app, por la interfaz que reescribe el paso 6); toda
+// infracción nueva rompe el build. Regenerar con ./gradlew :<módulo>:detektBaseline.
 subprojects {
     pluginManager.withPlugin("io.gitlab.arturbosch.detekt") {
         configure<DetektExtension> {

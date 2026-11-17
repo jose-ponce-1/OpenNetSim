@@ -79,11 +79,7 @@ class TcpForwarder(
         var removed = false
 
         override fun sendToClient(segment: TcpPacket, kind: SegmentKind, isRetransmission: Boolean) {
-            val packet = if (key.isIpv6) {
-                segment.toIpv6Packet(serverIpBytes, clientIpBytes).toByteArray()
-            } else {
-                segment.toIpPacket(serverIpBytes, clientIpBytes).toByteArray()
-            }
+            val packet = segment.toIpBytes(serverIpBytes, clientIpBytes)
             // Paquetes completos, como los cuenta el motor, para restarlos del caudal de bajada.
             if (isRetransmission) retransmittedBytesCounter.addAndGet(packet.size.toLong())
             if (kind == SegmentKind.CONTROL) onControlPacket(packet) else onInboundPacket(packet)
@@ -129,6 +125,10 @@ class TcpForwarder(
     private val clock = environment.clock
     private val rejectedSynCounter = AtomicLong(0L)
 
+    /** Tope de la ventana de recepción de los sockets exteriores; null hasta [updateDegradation]. */
+    private var receiveWindowClampBytes: Int? = null
+    private var receiveWindowClampUnavailableReported = false
+
     // Solo el hilo del selector escribe; ConcurrentHashMap permite leer el tamaño desde otros hilos.
     private val sessions = ConcurrentHashMap<SessionKey, Session>()
     private val selector: Selector = Selector.open()
@@ -163,15 +163,43 @@ class TcpForwarder(
     fun rejectedSynCount(): Long = rejectedSynCounter.get()
 
     /**
-     * Ajusta el tope de bytes en vuelo y el RTO inicial a la degradación configurada.
+     * Ajusta a la degradación configurada el tope de bytes en vuelo, el RTO inicial y la ventana de
+     * recepción de los sockets exteriores, también en las conexiones ya abiertas.
      */
     fun updateDegradation(downKbps: Int, latencyMs: Int, jitterMs: Int) {
         val maxInFlight = TcpWindowPolicy.bdpCapBytes(downKbps, latencyMs, jitterMs)
         val initialRto = TcpWindowPolicy.initialRtoMs(latencyMs, jitterMs)
+        val receiveWindow = TcpWindowPolicy.receiveWindowClampBytes(downKbps, latencyMs, jitterMs)
         taskQueue.post {
             tcpConfig = tcpConfig.copy(maxInFlightBytes = maxInFlight, initialRtoMs = initialRto)
-            sessions.values.forEach { it.connection.maxInFlightBytes = maxInFlight }
+            receiveWindowClampBytes = receiveWindow
+            sessions.values.forEach {
+                it.connection.maxInFlightBytes = maxInFlight
+                clampReceiveWindow(it)
+            }
         }
+    }
+
+    /**
+     * Acota lo que esta sesión puede tener pendiente hacia el túnel (cola sin leer más datos en vuelo).
+     * Se aplica con el socket ya conectado: la escala de ventana se negocia en el SYN sin tope, y así el
+     * tope puede subir después.
+     */
+    private fun clampReceiveWindow(session: Session) {
+        val bytes = receiveWindowClampBytes
+        if (bytes == null || session.removed || !session.channel.isConnected) return
+        try {
+            environment.receiveWindowClamp.apply(session.channel.socket(), bytes)
+        } catch (e: IOException) {
+            reportClampUnavailable(e) // La sesión sigue sin tope, como antes.
+        }
+    }
+
+    /** Avisa una sola vez de que el tope no se puede aplicar en este sistema. */
+    private fun reportClampUnavailable(error: IOException) {
+        if (receiveWindowClampUnavailableReported) return
+        receiveWindowClampUnavailableReported = true
+        diagnostics.warn("tcp.clamp", "No se pudo acotar la ventana de recepción de los sockets exteriores", error)
     }
 
     /** El pipeline de bajada vuelve a admitir datos: reanudar lecturas pausadas. */
@@ -188,7 +216,7 @@ class TcpForwarder(
             ipPacket.destinationIp,
             ipPacket.sourceIpString,
             ipPacket.destinationIpString,
-            ipPacket.payload,
+            TcpPacket.parse(ipPacket.payloadBuffer, ipPacket.payloadOffset, ipPacket.payloadSize),
             false
         )
     }
@@ -202,7 +230,7 @@ class TcpForwarder(
             ipv6Packet.destinationIp,
             ipv6Packet.sourceIpString,
             ipv6Packet.destinationIpString,
-            ipv6Packet.payload,
+            TcpPacket.parse(ipv6Packet.payloadBuffer, ipv6Packet.payloadOffset, ipv6Packet.payloadSize),
             true
         )
     }
@@ -213,11 +241,11 @@ class TcpForwarder(
         dstIpBytes: ByteArray,
         srcIpString: String,
         dstIpString: String,
-        payload: ByteArray,
+        segment: TcpPacket?,
         isIpv6: Boolean
     ) {
         if (!isRunning) return
-        val tcp = TcpPacket.parse(payload) ?: return
+        val tcp = segment ?: return
         val key = SessionKey(srcIpString, tcp.sourcePort, dstIpString, tcp.destinationPort, isIpv6)
         // Modelo actor: el estado de la sesión solo se toca en el hilo del selector.
         taskQueue.post { handleClientSegment(key, srcIpBytes, dstIpBytes, tcp) }
@@ -234,7 +262,7 @@ class TcpForwarder(
                 openSession(key, clientIp, serverIp, tcp, now)
             } else {
                 // Segmento de una sesión que ya no existe (p. ej. conexión del pool expirada): RST.
-                TcpPacket.buildRstForSegment(tcp)?.let { sendDetached(key, clientIp, serverIp, it) }
+                TcpPacket.buildRstForSegment(tcp)?.let { sendDetached(clientIp, serverIp, it) }
             }
             return
         }
@@ -263,7 +291,7 @@ class TcpForwarder(
             "tcp.limit",
             "Límite de $maxSessions conexiones TCP: se rechaza ${describe(key)} con RST (rechazos: $total)"
         )
-        TcpPacket.buildRstForSegment(syn)?.let { sendDetached(key, clientIp, serverIp, it) }
+        TcpPacket.buildRstForSegment(syn)?.let { sendDetached(clientIp, serverIp, it) }
     }
 
     private fun connectSession(key: SessionKey, clientIp: ByteArray, serverIp: ByteArray, syn: TcpPacket, now: Long) {
@@ -271,13 +299,13 @@ class TcpForwarder(
             SocketChannel.open().apply { configureBlocking(false) }
         } catch (e: IOException) {
             diagnostics.warn("tcp.open", "No se pudo crear el socket TCP hacia ${describe(key)}", e)
-            TcpPacket.buildRstForSegment(syn)?.let { sendDetached(key, clientIp, serverIp, it) }
+            TcpPacket.buildRstForSegment(syn)?.let { sendDetached(clientIp, serverIp, it) }
             return
         }
         if (!environment.socketProtector.protect(channel.socket())) {
             diagnostics.warn("tcp.protect", "protect() rechazó el socket TCP hacia ${describe(key)}")
             closeChannelQuietly(channel)
-            TcpPacket.buildRstForSegment(syn)?.let { sendDetached(key, clientIp, serverIp, it) }
+            TcpPacket.buildRstForSegment(syn)?.let { sendDetached(clientIp, serverIp, it) }
             return
         }
 
@@ -296,7 +324,10 @@ class TcpForwarder(
             val connected = channel.connect(InetSocketAddress(InetAddress.getByAddress(serverIp), key.serverPort))
             val interest = if (connected) SelectionKey.OP_READ else SelectionKey.OP_CONNECT
             session.selectionKey = channel.register(selector, interest, session)
-            if (connected) session.connection.onUpstreamConnected(now)
+            if (connected) {
+                clampReceiveWindow(session)
+                session.connection.onUpstreamConnected(now)
+            }
         } catch (e: IOException) {
             diagnostics.warn("tcp.connect", "Conexión rechazada hacia ${describe(key)}: ${e.message}", e)
             session.connection.abort()
@@ -304,13 +335,8 @@ class TcpForwarder(
     }
 
     /** Envía un segmento de control que no pertenece a ninguna sesión (RST de respuesta). */
-    private fun sendDetached(key: SessionKey, clientIp: ByteArray, serverIp: ByteArray, segment: TcpPacket) {
-        val packet = if (key.isIpv6) {
-            segment.toIpv6Packet(serverIp, clientIp).toByteArray()
-        } else {
-            segment.toIpPacket(serverIp, clientIp).toByteArray()
-        }
-        onControlPacket(packet)
+    private fun sendDetached(clientIp: ByteArray, serverIp: ByteArray, segment: TcpPacket) {
+        onControlPacket(segment.toIpBytes(serverIp, clientIp))
     }
 
     /** Tras cada evento: aplicar fallos de I/O diferidos y reanudar lecturas si hay ventana. */
@@ -343,8 +369,8 @@ class TcpForwarder(
                         handleSelectedKeys()
                     }
                     runTimers()
-                } catch (e: ClosedSelectorException) {
-                    break
+                } catch (ignored: ClosedSelectorException) {
+                    break // close() cerró el selector: fin normal del bucle.
                 } catch (e: IOException) {
                     diagnostics.warn("tcp.selector", "Error de I/O en el selector TCP", e)
                 } catch (e: RuntimeException) {
@@ -403,6 +429,7 @@ class TcpForwarder(
         try {
             if (session.channel.finishConnect()) {
                 session.selectionKey?.interestOps(SelectionKey.OP_READ)
+                clampReceiveWindow(session)
                 session.connection.onUpstreamConnected(clock.nowMs())
             }
         } catch (e: IOException) {
@@ -443,12 +470,12 @@ class TcpForwarder(
 
     private fun handleWrite(session: Session) {
         try {
-            while (true) {
-                val buffer = session.pendingWrites.firstOrNull() ?: break
-                val written = session.channel.write(buffer)
-                session.pendingWriteBytes -= written
-                if (buffer.hasRemaining()) break
+            var buffer = session.pendingWrites.firstOrNull()
+            while (buffer != null) {
+                session.pendingWriteBytes -= session.channel.write(buffer)
+                if (buffer.hasRemaining()) break // Socket lleno: se sigue con OP_WRITE.
                 session.pendingWrites.removeFirst()
+                buffer = session.pendingWrites.firstOrNull()
             }
         } catch (e: IOException) {
             session.ioFailure = e

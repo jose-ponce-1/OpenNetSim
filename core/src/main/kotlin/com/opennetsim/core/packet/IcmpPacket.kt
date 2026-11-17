@@ -11,7 +11,7 @@ data class IcmpPacket(
     val checksum: Int = 0,
     val identifier: Int,
     val sequenceNumber: Int,
-    val payload: ByteArray = ByteArray(0)
+    val payload: ByteArray = PacketBytes.EMPTY
 ) {
     val isEchoRequestV4: Boolean get() = type == TYPE_ECHO_REQUEST_V4 && code == 0
     val isEchoRequestV6: Boolean get() = type == TYPE_ECHO_REQUEST_V6 && code == 0
@@ -96,32 +96,23 @@ data class IcmpPacket(
         const val TYPE_ECHO_REQUEST_V6 = 128
         const val TYPE_ECHO_REPLY_V6 = 129
 
+        private const val BYTE_MASK = 0xFF
+        private const val CHECKSUM_OFFSET = 2
+        private const val IDENTIFIER_OFFSET = 4
+        private const val SEQUENCE_OFFSET = 6
+
         /**
          * Parsea un datagrama ICMP a partir de los bytes del payload de un paquete IP.
          */
         fun parse(data: ByteArray, offset: Int = 0, length: Int = data.size): IcmpPacket? {
             if (length < HEADER_SIZE) return null
-
-            val type = data[offset].toInt() and 0xFF
-            val code = data[offset + 1].toInt() and 0xFF
-            val checksum = ((data[offset + 2].toInt() and 0xFF) shl 8) or (data[offset + 3].toInt() and 0xFF)
-            val identifier = ((data[offset + 4].toInt() and 0xFF) shl 8) or (data[offset + 5].toInt() and 0xFF)
-            val seqNumber = ((data[offset + 6].toInt() and 0xFF) shl 8) or (data[offset + 7].toInt() and 0xFF)
-
-            val payloadLength = length - HEADER_SIZE
-            val payload = if (payloadLength > 0) {
-                data.copyOfRange(offset + HEADER_SIZE, offset + length)
-            } else {
-                ByteArray(0)
-            }
-
             return IcmpPacket(
-                type = type,
-                code = code,
-                checksum = checksum,
-                identifier = identifier,
-                sequenceNumber = seqNumber,
-                payload = payload
+                type = data[offset].toInt() and BYTE_MASK,
+                code = data[offset + 1].toInt() and BYTE_MASK,
+                checksum = PacketBytes.readU16(data, offset + CHECKSUM_OFFSET),
+                identifier = PacketBytes.readU16(data, offset + IDENTIFIER_OFFSET),
+                sequenceNumber = PacketBytes.readU16(data, offset + SEQUENCE_OFFSET),
+                payload = PacketBytes.slice(data, offset + HEADER_SIZE, offset + length)
             )
         }
     }

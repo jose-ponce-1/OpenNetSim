@@ -123,7 +123,7 @@ class UdpForwarder(
             dstIpBytes = ipPacket.destinationIp,
             srcIpString = ipPacket.sourceIpString,
             dstIpString = ipPacket.destinationIpString,
-            payload = ipPacket.payload,
+            datagram = UdpPacket.parse(ipPacket.payloadBuffer, ipPacket.payloadOffset, ipPacket.payloadSize),
             isIpv6 = false
         )
     }
@@ -137,7 +137,7 @@ class UdpForwarder(
             dstIpBytes = ipv6Packet.destinationIp,
             srcIpString = ipv6Packet.sourceIpString,
             dstIpString = ipv6Packet.destinationIpString,
-            payload = ipv6Packet.payload,
+            datagram = UdpPacket.parse(ipv6Packet.payloadBuffer, ipv6Packet.payloadOffset, ipv6Packet.payloadSize),
             isIpv6 = true
         )
     }
@@ -148,12 +148,12 @@ class UdpForwarder(
         dstIpBytes: ByteArray,
         srcIpString: String,
         dstIpString: String,
-        payload: ByteArray,
+        datagram: UdpPacket?,
         isIpv6: Boolean
     ) {
         if (!isRunning) return
 
-        val udp = UdpPacket.parse(payload) ?: return
+        val udp = datagram ?: return
         val key = SessionKey(
             clientIp = srcIpString,
             clientPort = udp.sourcePort,
@@ -200,11 +200,7 @@ class UdpForwarder(
             length = UdpPacket.HEADER_SIZE + payload.size,
             payload = payload
         )
-        val originalBytes = if (key.isIpv6) {
-            original.toIpv6Packet(clientIpBytes, serverIpBytes).toByteArray()
-        } else {
-            original.toIpPacket(clientIpBytes, serverIpBytes).toByteArray()
-        }
+        val originalBytes = original.toIpBytes(clientIpBytes, serverIpBytes)
         onInboundPacket(
             IcmpUnreachable.buildIpPacket(
                 originalPacket = originalBytes,
@@ -224,39 +220,52 @@ class UdpForwarder(
     ): Session? {
         taskQueue.checkOwnerThread()
         if (sessions.size >= policy.maxSessions) evictLeastRecentlyActive()
-        val channel = try {
-            DatagramChannel.open()
-        } catch (e: IOException) {
-            diagnostics.warn("udp.open", "No se pudo crear el socket UDP hacia ${describe(key)}", e)
-            return null
-        }
-
+        val channel = openChannel(key) ?: return null
         return try {
             channel.configureBlocking(false)
-            if (!environment.socketProtector.protect(channel.socket())) {
+            if (environment.socketProtector.protect(channel.socket())) {
+                connectSession(key, channel, clientIpBytes, serverIpBytes)
+            } else {
                 diagnostics.warn("udp.protect", "protect() rechazó el socket UDP hacia ${describe(key)}")
                 channel.close()
-                return null
+                null
             }
-            channel.connect(InetSocketAddress(InetAddress.getByAddress(serverIpBytes), key.serverPort))
-
-            val session = Session(
-                key = key,
-                channel = channel,
-                clientIpBytes = clientIpBytes.copyOf(),
-                serverIpBytes = serverIpBytes.copyOf(),
-                idleTimeoutMs = policy.idleTimeoutFor(key.serverPort),
-                lastActiveTimeMs = clock.nowMs()
-            )
-            channel.register(selector, SelectionKey.OP_READ, session)
-            sessions[key] = session
-            session
         } catch (e: IOException) {
             diagnostics.warn("udp.connect", "No se pudo conectar el socket UDP a ${describe(key)}: ${e.message}", e)
             closeQuietly(channel)
             emitUnreachable(key, clientIpBytes, serverIpBytes, firstPayload, e)
             null
         }
+    }
+
+    private fun openChannel(key: SessionKey): DatagramChannel? =
+        try {
+            DatagramChannel.open()
+        } catch (e: IOException) {
+            diagnostics.warn("udp.open", "No se pudo crear el socket UDP hacia ${describe(key)}", e)
+            null
+        }
+
+    /** Conecta el canal ya protegido, crea la sesión y la registra en el selector. */
+    @Throws(IOException::class)
+    private fun connectSession(
+        key: SessionKey,
+        channel: DatagramChannel,
+        clientIpBytes: ByteArray,
+        serverIpBytes: ByteArray
+    ): Session {
+        channel.connect(InetSocketAddress(InetAddress.getByAddress(serverIpBytes), key.serverPort))
+        val session = Session(
+            key = key,
+            channel = channel,
+            clientIpBytes = clientIpBytes.copyOf(),
+            serverIpBytes = serverIpBytes.copyOf(),
+            idleTimeoutMs = policy.idleTimeoutFor(key.serverPort),
+            lastActiveTimeMs = clock.nowMs()
+        )
+        channel.register(selector, SelectionKey.OP_READ, session)
+        sessions[key] = session
+        return session
     }
 
     @Suppress("TooGenericExceptionCaught")
@@ -270,8 +279,8 @@ class UdpForwarder(
                         handleSelectedKeys()
                     }
                     cleanupIdleSessions()
-                } catch (e: ClosedSelectorException) {
-                    break
+                } catch (ignored: ClosedSelectorException) {
+                    break // close() cerró el selector: fin normal del bucle.
                 } catch (e: IOException) {
                     diagnostics.warn("udp.selector", "Error de I/O en el selector UDP", e)
                 } catch (e: RuntimeException) {
@@ -292,9 +301,8 @@ class UdpForwarder(
         while (selectedKeys.hasNext()) {
             val selKey = selectedKeys.next()
             selectedKeys.remove()
-            if (!selKey.isValid || !selKey.isReadable) continue
-            val session = selKey.attachment() as? Session ?: continue
-            handleIncomingData(session)
+            val session = selKey.takeIf { it.isValid && it.isReadable }?.attachment() as? Session
+            if (session != null) handleIncomingData(session)
         }
     }
 
@@ -325,13 +333,7 @@ class UdpForwarder(
                     payload = payload
                 )
 
-                val packetBytes = if (session.key.isIpv6) {
-                    responseUdp.toIpv6Packet(session.serverIpBytes, session.clientIpBytes).toByteArray()
-                } else {
-                    responseUdp.toIpPacket(session.serverIpBytes, session.clientIpBytes).toByteArray()
-                }
-
-                onInboundPacket(packetBytes)
+                onInboundPacket(responseUdp.toIpBytes(session.serverIpBytes, session.clientIpBytes))
             }
         } catch (e: IOException) {
             diagnostics.warn("udp.read", "Fallo al recibir de ${describe(session.key)}: ${e.message}", e)
