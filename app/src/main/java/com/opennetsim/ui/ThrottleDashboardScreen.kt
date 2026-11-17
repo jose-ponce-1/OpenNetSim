@@ -53,6 +53,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -74,27 +75,22 @@ import com.opennetsim.ui.theme.Slate800
 import com.opennetsim.ui.theme.Slate900
 import com.opennetsim.ui.theme.Slate950
 import java.util.Locale
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ThrottleDashboardScreen(
     uiState: MainUiState,
-    onPresetSelected: (ThrottlePreset) -> Unit,
-    onDownBandwidthChanged: (Int) -> Unit,
-    onUpBandwidthChanged: (Int) -> Unit,
-    onLatencyChanged: (Int) -> Unit,
-    onJitterChanged: (Int) -> Unit,
-    onPacketLossChanged: (Float) -> Unit,
-    onToggleClick: () -> Unit,
-    onDismissSnackbar: () -> Unit,
+    actions: DashboardActions,
     modifier: Modifier = Modifier
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
+    val onSnackbarDismiss by rememberUpdatedState(actions.onSnackbarDismiss)
 
     LaunchedEffect(uiState.userMessage) {
         uiState.userMessage?.let { message ->
             snackbarHostState.showSnackbar(message)
-            onDismissSnackbar()
+            onSnackbarDismiss()
         }
     }
 
@@ -132,63 +128,60 @@ fun ThrottleDashboardScreen(
             )
         }
     ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // Hero: Tarjeta Principal de Control ON / OFF
-            HeroActivationCard(
-                isActive = uiState.isActive,
-                selectedPreset = uiState.selectedPreset,
-                onToggleClick = onToggleClick
-            )
+        DashboardContent(
+            uiState = uiState,
+            actions = actions,
+            modifier = Modifier.padding(innerPadding)
+        )
+    }
+}
 
-            // Telemetría en Tiempo Real
-            LiveTelemetrySection(
-                telemetry = uiState.telemetry,
-                isActive = uiState.isActive,
-                ipv6Routed = uiState.ipv6Routed
-            )
+@Composable
+private fun DashboardContent(
+    uiState: MainUiState,
+    actions: DashboardActions,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Hero: Tarjeta Principal de Control ON / OFF
+        HeroActivationCard(
+            isActive = uiState.isActive,
+            selectedPreset = uiState.selectedPreset,
+            onToggleClick = actions.onToggleClick
+        )
 
-            // Selector Horizontal de Perfiles
-            PresetsSection(
-                selectedPreset = uiState.selectedPreset,
-                onPresetSelected = onPresetSelected
-            )
+        // Telemetría en Tiempo Real
+        LiveTelemetrySection(
+            telemetry = uiState.telemetry,
+            isActive = uiState.isActive,
+            ipv6Routed = uiState.ipv6Routed
+        )
 
-            // Sección 1: Ancho de Banda (Upload / Download)
-            BandwidthSection(
-                downKbps = uiState.config.downKbps,
-                upKbps = uiState.config.upKbps,
-                formattedDown = uiState.config.formattedDownBandwidth(),
-                formattedUp = uiState.config.formattedUpBandwidth(),
-                onDownChanged = onDownBandwidthChanged,
-                onUpChanged = onUpBandwidthChanged
-            )
+        // Selector Horizontal de Perfiles
+        PresetsSection(
+            selectedPreset = uiState.selectedPreset,
+            onPresetSelected = actions.onPresetSelect
+        )
 
-            // Sección 2: Latencia & Jitter
-            LatencySection(
-                latencyMs = uiState.config.latencyMs,
-                jitterMs = uiState.config.jitterMs,
-                onLatencyChanged = onLatencyChanged,
-                onJitterChanged = onJitterChanged
-            )
+        // Sección 1: Ancho de Banda (Upload / Download)
+        BandwidthSection(config = uiState.config, onConfigChange = actions.onConfigChange)
 
-            // Sección 3: Pérdida de Paquetes
-            PacketLossSection(
-                lossPercent = uiState.config.packetLossPercent,
-                onLossChanged = onPacketLossChanged
-            )
+        // Sección 2: Latencia, jitter y reordenación
+        LatencySection(config = uiState.config, onConfigChange = actions.onConfigChange)
 
-            // Nota informativa
-            InfoCard()
+        // Sección 3: Pérdida de paquetes por dirección y en ráfagas
+        PacketLossSection(config = uiState.config, onConfigChange = actions.onConfigChange)
 
-            Spacer(modifier = Modifier.height(24.dp))
-        }
+        // Nota informativa
+        InfoCard()
+
+        Spacer(modifier = Modifier.height(24.dp))
     }
 }
 
@@ -341,141 +334,191 @@ private fun PresetsSection(
 
 @Composable
 private fun BandwidthSection(
-    downKbps: Int,
-    upKbps: Int,
-    formattedDown: String,
-    formattedUp: String,
-    onDownChanged: (Int) -> Unit,
-    onUpChanged: (Int) -> Unit
+    config: ThrottleConfig,
+    onConfigChange: ((ThrottleConfig) -> ThrottleConfig) -> Unit
 ) {
     ControlCard(
         title = "Límites de Ancho de Banda",
         icon = Icons.Default.NetworkCheck
     ) {
-        // Download
         SliderControlRow(
             label = "Bajada (Download)",
             icon = Icons.Default.CloudDownload,
-            valueDisplay = formattedDown,
-            value = downKbps.toFloat(),
+            valueDisplay = config.formattedDownBandwidth(),
+            value = config.downKbps.toFloat(),
             range = 50f..50000f,
-            onValueChange = { onDownChanged(it.toInt()) }
+            onValueChange = { value -> onConfigChange { it.copy(downKbps = value.toInt()) } }
         )
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Upload
         SliderControlRow(
             label = "Subida (Upload)",
             icon = Icons.Default.CloudUpload,
-            valueDisplay = formattedUp,
-            value = upKbps.toFloat(),
+            valueDisplay = config.formattedUpBandwidth(),
+            value = config.upKbps.toFloat(),
             range = 20f..20000f,
-            onValueChange = { onUpChanged(it.toInt()) }
+            onValueChange = { value -> onConfigChange { it.copy(upKbps = value.toInt()) } }
         )
     }
 }
 
 @Composable
 private fun LatencySection(
-    latencyMs: Int,
-    jitterMs: Int,
-    onLatencyChanged: (Int) -> Unit,
-    onJitterChanged: (Int) -> Unit
+    config: ThrottleConfig,
+    onConfigChange: ((ThrottleConfig) -> ThrottleConfig) -> Unit
 ) {
     ControlCard(
         title = "Latencia y Variabilidad",
         icon = Icons.Default.HourglassTop
     ) {
-        // Ping base
         SliderControlRow(
             label = "Latencia adicional (Ping)",
             icon = null,
-            valueDisplay = "+$latencyMs ms",
-            value = latencyMs.toFloat(),
+            valueDisplay = "+${config.latencyMs} ms",
+            value = config.latencyMs.toFloat(),
             range = 0f..1000f,
-            onValueChange = { onLatencyChanged(it.toInt()) }
+            onValueChange = { value -> onConfigChange { it.copy(latencyMs = value.toInt()) } }
         )
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Jitter
         SliderControlRow(
             label = "Jitter (Fluctuación)",
             icon = null,
-            valueDisplay = "±$jitterMs ms",
-            value = jitterMs.toFloat(),
+            valueDisplay = "±${config.jitterMs} ms",
+            value = config.jitterMs.toFloat(),
             range = 0f..200f,
-            onValueChange = { onJitterChanged(it.toInt()) }
+            onValueChange = { value -> onConfigChange { it.copy(jitterMs = value.toInt()) } }
         )
+        HintText("El jitter varía el retardo sin cambiar el orden de los paquetes.")
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        SliderControlRow(
+            label = "Reordenación",
+            icon = null,
+            valueDisplay = String.format(Locale.US, "%.1f%%", config.reorderPercent),
+            value = config.reorderPercent,
+            range = 0f..ThrottleConfig.MAX_REORDER_PERCENT,
+            onValueChange = { value -> onConfigChange { it.copy(reorderPercent = value) } }
+        )
+        HintText("Paquetes que salen sin latencia y adelantan a los que esperan. Requiere latencia > 0.")
     }
 }
 
 @Composable
 private fun PacketLossSection(
-    lossPercent: Float,
-    onLossChanged: (Float) -> Unit
+    config: ThrottleConfig,
+    onConfigChange: ((ThrottleConfig) -> ThrottleConfig) -> Unit
 ) {
     ControlCard(
         title = "Pérdida de Paquetes",
         icon = Icons.Default.WifiOff
     ) {
-        val formattedLoss = String.format(Locale.US, "%.1f%%", lossPercent)
-        val isHighLoss = lossPercent >= 10.0f
+        val isHighLoss = maxOf(config.upLossPercent, config.downLossPercent) >= HIGH_LOSS_PERCENT
+
+        LossSlider(
+            label = "Pérdida de subida",
+            icon = Icons.Default.CloudUpload,
+            lossPercent = config.upLossPercent,
+            onLossChange = { value -> onConfigChange { it.copy(upLossPercent = value) } }
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        LossSlider(
+            label = "Pérdida de bajada",
+            icon = Icons.Default.CloudDownload,
+            lossPercent = config.downLossPercent,
+            onLossChange = { value -> onConfigChange { it.copy(downLossPercent = value) } }
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
 
         SliderControlRow(
-            label = "Tasa de Descarte",
+            label = "Ráfaga media",
             icon = null,
-            valueDisplay = formattedLoss,
-            value = lossPercent,
-            range = 0f..50f,
-            onValueChange = { onLossChanged(it) },
-            accentColor = if (isHighLoss) RoseDanger else CyanPrimary
+            valueDisplay = if (config.lossBurstLength <= 1) "Independiente" else "${config.lossBurstLength} paquetes",
+            value = config.lossBurstLength.toFloat(),
+            range = 1f..ThrottleConfig.MAX_LOSS_BURST_LENGTH.toFloat(),
+            onValueChange = { value -> onConfigChange { it.copy(lossBurstLength = value.roundToInt()) } }
         )
+        HintText("Con ráfagas, los paquetes se pierden seguidos (modelo de Gilbert) manteniendo la tasa media.")
 
-        // La pérdida se aplica en cada dirección: un ping o una petición/respuesta la sufren dos veces.
-        val roundTripLoss = ThrottleConfig.roundTripLossPercent(lossPercent)
-        Text(
-            text = String.format(
+        HintText(
+            String.format(
                 Locale.US,
-                "Se aplica en cada dirección. Pérdida de ida y vuelta (p. ej. ping): %.1f%%",
-                roundTripLoss
-            ),
-            style = MaterialTheme.typography.bodySmall,
-            color = Slate400,
-            modifier = Modifier.padding(top = 4.dp)
+                "Pérdida de ida y vuelta (p. ej. ping): %.1f%%",
+                config.roundTripLossPercent
+            )
         )
 
-        AnimatedVisibility(
-            visible = isHighLoss,
-            enter = fadeIn(),
-            exit = fadeOut()
+        HighLossWarning(visible = isHighLoss)
+    }
+}
+
+@Composable
+private fun HighLossWarning(visible: Boolean) {
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(),
+        exit = fadeOut()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 12.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(AmberWarning.copy(alpha = 0.15f))
+                .padding(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 12.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(AmberWarning.copy(alpha = 0.15f))
-                    .padding(10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.WarningAmber,
-                    contentDescription = null,
-                    tint = AmberWarning,
-                    modifier = Modifier.size(20.dp)
-                )
-                Text(
-                    text = "Pérdida elevada (>10%). Muchas conexiones TCP experimentarán retransmisiones masivas o caídas.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = AmberWarning
-                )
-            }
+            Icon(
+                imageVector = Icons.Default.WarningAmber,
+                contentDescription = null,
+                tint = AmberWarning,
+                modifier = Modifier.size(20.dp)
+            )
+            Text(
+                text = "Pérdida elevada (>10%). Muchas conexiones TCP sufrirán retransmisiones o caídas.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = AmberWarning
+            )
         }
     }
 }
+
+@Composable
+private fun LossSlider(
+    label: String,
+    icon: ImageVector,
+    lossPercent: Float,
+    onLossChange: (Float) -> Unit
+) {
+    SliderControlRow(
+        label = label,
+        icon = icon,
+        valueDisplay = String.format(Locale.US, "%.1f%%", lossPercent),
+        value = lossPercent,
+        range = 0f..50f,
+        onValueChange = onLossChange,
+        accentColor = if (lossPercent >= HIGH_LOSS_PERCENT) RoseDanger else CyanPrimary
+    )
+}
+
+@Composable
+private fun HintText(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        color = Slate400,
+        modifier = Modifier.padding(top = 4.dp)
+    )
+}
+
+private const val HIGH_LOSS_PERCENT = 10f
 
 @Composable
 private fun SliderControlRow(

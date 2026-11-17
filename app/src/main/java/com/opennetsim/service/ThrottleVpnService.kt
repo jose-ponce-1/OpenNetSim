@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.ParcelFileDescriptor
+import android.system.ErrnoException
 import com.opennetsim.core.buffer.ByteBufferPool
 import com.opennetsim.core.time.MonotonicClock
 import com.opennetsim.model.NetworkTelemetry
@@ -20,7 +21,9 @@ import com.opennetsim.service.diag.DiagLevel
 import com.opennetsim.service.diag.NetDiagnostics
 import com.opennetsim.service.diag.error
 import com.opennetsim.service.diag.warn
+import com.opennetsim.service.forwarder.AndroidIcmpEchoTransport
 import com.opennetsim.service.forwarder.ForwarderEnvironment
+import com.opennetsim.service.forwarder.IcmpEchoTransport
 import com.opennetsim.service.forwarder.VpnSocketProtector
 import com.opennetsim.service.network.UnderlyingNetworkMonitor
 import com.opennetsim.service.pipeline.ParcelFileDescriptorTunDevice
@@ -30,6 +33,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import java.io.FileDescriptor
 import java.net.DatagramSocket
 import java.net.Socket
 
@@ -192,7 +196,8 @@ class ThrottleVpnService : VpnService(), VpnSocketProtector {
                 clock = clock
             ),
             listener = listener,
-            mtu = TUN_MTU
+            mtu = TUN_MTU,
+            icmpTransport = createIcmpTransport()
         )
         listener.owner = newPipeline
         pipeline = newPipeline
@@ -202,6 +207,18 @@ class ThrottleVpnService : VpnService(), VpnSocketProtector {
         newPipeline.start()
         return true
     }
+
+    /** Sockets de ping del sistema para reenviar ICMP real; sin ellos el ping queda sin respuesta. */
+    private fun createIcmpTransport(): IcmpEchoTransport = try {
+        AndroidIcmpEchoTransport(protect = ::protectDescriptor, diagnostics = diagnostics)
+    } catch (e: ErrnoException) {
+        diagnostics.warn("icmp.transport", "Sin sockets de ping: el ping no tendrá respuesta", e)
+        IcmpEchoTransport.UNAVAILABLE
+    }
+
+    /** `protect()` para un socket abierto con `android.system.Os` (solo hay `protect(int)`). */
+    private fun protectDescriptor(descriptor: FileDescriptor): Boolean =
+        ParcelFileDescriptor.dup(descriptor).use { protect(it.fd) }
 
     /** Recibe los avisos de un pipeline y los ignora si ese pipeline ya fue sustituido. */
     private inner class PipelineListener : TunnelPipeline.Listener {

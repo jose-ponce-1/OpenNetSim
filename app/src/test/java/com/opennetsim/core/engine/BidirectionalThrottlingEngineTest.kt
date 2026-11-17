@@ -18,7 +18,8 @@ class BidirectionalThrottlingEngineTest {
             upKbps = 200, // 25_000 B/s
             latencyMs = 100, // 50ms up, 50ms down
             jitterMs = 0,
-            packetLossPercent = 0.0f
+            upLossPercent = 0.0f,
+            downLossPercent = 0.0f
         )
 
         val engine = BidirectionalThrottlingEngine.fromConfig(
@@ -40,7 +41,8 @@ class BidirectionalThrottlingEngineTest {
             upKbps = 500,
             latencyMs = 80, // 40ms por sentido
             jitterMs = 0,
-            packetLossPercent = 0.0f
+            upLossPercent = 0.0f,
+            downLossPercent = 0.0f
         )
 
         val engine = BidirectionalThrottlingEngine.fromConfig(
@@ -90,7 +92,8 @@ class BidirectionalThrottlingEngineTest {
             upKbps = 500,
             latencyMs = 100,
             jitterMs = 20,
-            packetLossPercent = 5.0f
+            upLossPercent = 5.0f,
+            downLossPercent = 5.0f
         )
 
         val engine = BidirectionalThrottlingEngine.fromConfig(
@@ -103,7 +106,8 @@ class BidirectionalThrottlingEngineTest {
             upKbps = 800,
             latencyMs = 200,
             jitterMs = 40,
-            packetLossPercent = 10.0f
+            upLossPercent = 10.0f,
+            downLossPercent = 10.0f
         )
 
         engine.updateConfig(newConfig)
@@ -129,7 +133,8 @@ class BidirectionalThrottlingEngineTest {
             upKbps = 10,
             latencyMs = 0,
             jitterMs = 0,
-            packetLossPercent = 0.0f
+            upLossPercent = 0.0f,
+            downLossPercent = 0.0f
         )
 
         val engine = BidirectionalThrottlingEngine.fromConfig(
@@ -178,7 +183,8 @@ class BidirectionalThrottlingEngineTest {
             upKbps = 10, // 1250 B/s, burst floor = 1500B initial tokens
             latencyMs = 0,
             jitterMs = 0,
-            packetLossPercent = 0.0f
+            upLossPercent = 0.0f,
+            downLossPercent = 0.0f
         )
 
         val engine = BidirectionalThrottlingEngine.fromConfig(
@@ -235,7 +241,8 @@ class BidirectionalThrottlingEngineTest {
             upKbps = 20, // 2500 B/s
             latencyMs = 500, // 250 ms por sentido
             jitterMs = 0,
-            packetLossPercent = 0.0f
+            upLossPercent = 0.0f,
+            downLossPercent = 0.0f
         )
 
         val engine = BidirectionalThrottlingEngine.fromConfig(
@@ -268,7 +275,15 @@ class BidirectionalThrottlingEngineTest {
 
     @Test
     fun testDownlinkCapacitySignalFlipsAtThreeQuartersOfBulkCapacity() {
-        val config = ThrottleConfig(downKbps = 128, upKbps = 128, latencyMs = 200, jitterMs = 0, packetLossPercent = 0f)
+        val config =
+            ThrottleConfig(
+                downKbps = 128,
+                upKbps = 128,
+                latencyMs = 200,
+                jitterMs = 0,
+                upLossPercent = 0f,
+                downLossPercent = 0f
+            )
         val engine = BidirectionalThrottlingEngine.fromConfig(
             config = config,
             clock = MonotonicClock.ofMillis { simulatedTimeMs }

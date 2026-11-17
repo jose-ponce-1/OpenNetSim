@@ -84,10 +84,51 @@ monotónico, de modo que un cambio de la hora del sistema no altere la degradaci
 - **THEN** el token bucket acumula exactamente los tokens de esos 300 ms (recortados a la ráfaga) y nada sale mientras el reloj simulado está parado
 
 ### Requirement: Pérdida de ida y vuelta visible
-Como la pérdida se aplica de forma independiente en cada dirección, la interfaz SHALL indicarlo junto
-al control de pérdida y SHALL mostrar la pérdida efectiva de un intercambio de ida y vuelta,
-`1 − (1 − p)²`.
+Como la pérdida se aplica de forma independiente en cada dirección, la interfaz SHALL mostrar junto a
+los controles de pérdida la pérdida efectiva de un intercambio de ida y vuelta,
+`1 − (1 − p↑)(1 − p↓)`.
 
 #### Scenario: Perfil Wi-Fi inestable
-- **WHEN** el usuario selecciona un 8 % de pérdida
-- **THEN** la interfaz indica que se aplica en cada dirección y que un ping se pierde aproximadamente el 15,4 % de las veces
+- **WHEN** el usuario selecciona un 8 % de pérdida en ambas direcciones
+- **THEN** la interfaz indica que un ping se pierde aproximadamente el 15,4 % de las veces
+
+#### Scenario: Pérdida solo en la subida
+- **WHEN** el usuario configura un 10 % de pérdida de subida y un 0 % de bajada
+- **THEN** la interfaz indica una pérdida de ida y vuelta del 10 %
+
+### Requirement: Jitter sin reordenación
+El jitter SHALL variar el retardo dentro de `latencia ± jitter` sin cambiar el orden de los paquetes de
+una dirección y sin desplazar la latencia media bajo carga.
+
+#### Scenario: Flujo continuo con jitter
+- **GIVEN** una dirección con 200 ms de latencia y ±50 ms de jitter
+- **WHEN** entra un paquete por milisegundo durante 5 s
+- **THEN** los paquetes salen en el orden de llegada, cada uno con un retardo entre 150 y 250 ms y una media de 200 ± 10 ms
+
+### Requirement: Reordenación configurable
+El túnel SHALL permitir configurar un porcentaje de paquetes que salen sin la latencia configurada y
+adelantan a los paquetes encolados; con 0 % nunca SHALL reordenar.
+
+#### Scenario: Paquete reordenado
+- **GIVEN** 100 ms de latencia y un paquete A encolado
+- **WHEN** entra un paquete B que resulta reordenado
+- **THEN** B sale antes que A, y A sale tras sus 100 ms
+
+### Requirement: Pérdida configurable por dirección
+La pérdida de la subida y la de la bajada SHALL configurarse por separado y cada dirección SHALL
+aplicar solo la suya.
+
+#### Scenario: Pérdida asimétrica
+- **GIVEN** un 3 % de pérdida de subida y un 12 % de bajada
+- **WHEN** pasa tráfico en ambas direcciones
+- **THEN** la subida descarta un 3 % ± 1 % de sus paquetes y la bajada un 12 % ± 1 %
+
+### Requirement: Pérdida en ráfagas
+El túnel SHALL permitir configurar la longitud media de las ráfagas de pérdida; con ráfagas, los
+paquetes perdidos SHALL agruparse manteniendo la tasa media configurada, y con longitud 1 SHALL
+perderse de forma independiente.
+
+#### Scenario: Ráfagas de 4 paquetes
+- **GIVEN** un 10 % de pérdida con ráfaga media de 4 paquetes
+- **WHEN** pasan 400.000 paquetes
+- **THEN** se pierde un 10 % ± 1 % y las pérdidas consecutivas forman ráfagas de 4 ± 0,3 paquetes de media

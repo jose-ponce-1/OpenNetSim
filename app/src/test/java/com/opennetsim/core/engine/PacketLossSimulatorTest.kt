@@ -76,4 +76,47 @@ class PacketLossSimulatorTest {
         // 0.80 >= 0.20 -> keep
         assertFalse(simulator.shouldDrop())
     }
+
+    /** Tasa media y longitud media de ráfaga observadas en [trials] paquetes. */
+    private fun measure(simulator: PacketLossSimulator, trials: Int): Pair<Double, Double> {
+        var dropped = 0
+        var bursts = 0
+        var previousDropped = false
+        repeat(trials) {
+            val drop = simulator.shouldDrop()
+            if (drop) {
+                dropped++
+                if (!previousDropped) bursts++
+            }
+            previousDropped = drop
+        }
+        return dropped.toDouble() / trials to dropped.toDouble() / bursts.coerceAtLeast(1)
+    }
+
+    @Test
+    fun testGilbertModelKeepsMeanLossAndProducesBursts() {
+        val random = kotlin.random.Random(7)
+        val simulator = PacketLossSimulator(0.10, { random.nextDouble() }, initialBurstLength = 4)
+        val (rate, meanBurst) = measure(simulator, 400_000)
+        assertEquals("La tasa media se mantiene", 0.10, rate, 0.01)
+        assertEquals("Ráfagas de 4 paquetes de media", 4.0, meanBurst, 0.3)
+    }
+
+    @Test
+    fun testBurstLengthOneMeansIndependentLosses() {
+        val random = kotlin.random.Random(11)
+        val simulator = PacketLossSimulator(0.10, { random.nextDouble() }, initialBurstLength = 1)
+        val (rate, meanBurst) = measure(simulator, 400_000)
+        assertEquals(0.10, rate, 0.01)
+        // Pérdidas independientes: ráfaga media 1 / (1 − p) ≈ 1,11.
+        assertEquals(1.11, meanBurst, 0.05)
+    }
+
+    @Test
+    fun testBurstLengthIsClampedToAtLeastOne() {
+        val simulator = PacketLossSimulator(initialBurstLength = 0)
+        assertEquals(1, simulator.burstLength)
+        simulator.updateBurstLength(6)
+        assertEquals(6, simulator.burstLength)
+    }
 }

@@ -66,6 +66,7 @@ data class EngineMetrics(
  * @param clock Reloj monotónico; debe ser el mismo que usan [bandwidthLimiter] y [latencyQueue]
  * (lo garantiza [createPipeline]).
  * @param queueWindowMs Retardo de cola máximo (además de la latencia) que admite el carril masivo.
+ * @param reorderRandom Generador uniforme en [0, 1) para decidir qué paquetes se reordenan.
  */
 @Suppress("TooManyFunctions")
 class ThrottlingEngine(
@@ -73,9 +74,31 @@ class ThrottlingEngine(
     val latencyQueue: LatencyQueue,
     val packetLossSimulator: PacketLossSimulator,
     private val clock: MonotonicClock = MonotonicClock.SYSTEM,
-    private val queueWindowMs: Long = DEFAULT_QUEUE_WINDOW_MS
+    private val queueWindowMs: Long = DEFAULT_QUEUE_WINDOW_MS,
+    private val reorderRandom: () -> Double = { kotlin.random.Random.nextDouble() }
 ) {
     private val interactiveQueue = LatencyQueue(clock = clock)
+
+    /**
+     * Probabilidad de que un paquete salga sin la latencia configurada (solo espera al ancho de
+     * banda) y adelante así a los paquetes encolados, como `netem reorder`.
+     */
+    var reorderProbability: Double = 0.0
+        @Synchronized get
+
+        @Synchronized set(value) {
+            field = value.coerceIn(0.0, 1.0)
+        }
+
+    /** Paquete que entra en el motor. */
+    private class Arrival(
+        val packet: ByteArray,
+        val now: Long,
+        val flowId: Long,
+        val allowImmediate: Boolean,
+        /** Sale sin latencia, adelantando a los encolados. */
+        val reordered: Boolean
+    )
 
     private var totalReceivedPackets: Long = 0L
     private var totalReleasedPackets: Long = 0L
@@ -143,43 +166,42 @@ class ThrottlingEngine(
             (flowId == DelayedPacket.NO_FLOW || (bulkPacketsByFlow[flowId] ?: 0) == 0)
 
         val demoted = trafficClass == TrafficClass.INTERACTIVE && !useInteractiveLane
-        return if (useInteractiveLane) {
-            enqueueInteractive(packet, currentTimeMs, flowId, allowImmediateRelease)
-        } else {
-            enqueueBulk(packet, currentTimeMs, flowId, allowImmediateRelease, demoted)
-        }
+        val reordered = reorderProbability > 0.0 && reorderRandom() < reorderProbability
+        val arrival = Arrival(packet, currentTimeMs, flowId, allowImmediateRelease, reordered)
+        return if (useInteractiveLane) enqueueInteractive(arrival) else enqueueBulk(arrival, demoted)
     }
 
-    private fun enqueueInteractive(packet: ByteArray, now: Long, flowId: Long, allowImmediate: Boolean): PacketResult {
-        val latencyReady = laneSchedule(now, interactiveQueue.isEmpty, lastInteractiveScheduledMs)
+    private fun enqueueInteractive(arrival: Arrival): PacketResult {
+        val packet = arrival.packet
+        val now = arrival.now
+        val latencyReady = laneSchedule(arrival, interactiveQueue.isEmpty, lastInteractiveScheduledMs)
         return when {
             interactiveQueue.size >= MAX_INTERACTIVE_PACKETS -> drop(packet)
-            allowImmediate && interactiveQueue.isEmpty && tryReleaseNow(latencyReady, now, packet) -> release(packet)
+            arrival.allowImmediate && interactiveQueue.isEmpty && tryReleaseNow(latencyReady, now, packet) -> release(
+                packet
+            )
             else -> {
-                lastInteractiveScheduledMs = latencyReady
-                interactiveQueue.enqueueWithScheduledTime(packet, latencyReady, now, flowId)
+                if (!arrival.reordered) lastInteractiveScheduledMs = latencyReady
+                interactiveQueue.enqueueWithScheduledTime(packet, latencyReady, now, arrival.flowId)
                 interactiveBytes += packet.size
                 estimateDeparture(latencyReady, interactiveBytes - packet.size, packet.size, now)
             }
         }
     }
 
-    private fun enqueueBulk(
-        packet: ByteArray,
-        now: Long,
-        flowId: Long,
-        allowImmediate: Boolean,
-        demoted: Boolean
-    ): PacketResult {
-        val latencyReady = laneSchedule(now, latencyQueue.isEmpty, lastBulkScheduledMs)
+    private fun enqueueBulk(arrival: Arrival, demoted: Boolean): PacketResult {
+        val packet = arrival.packet
+        val now = arrival.now
+        val flowId = arrival.flowId
+        val latencyReady = laneSchedule(arrival, latencyQueue.isEmpty, lastBulkScheduledMs)
         val lanesEmpty = latencyQueue.isEmpty && interactiveQueue.isEmpty
         return when {
-            allowImmediate && lanesEmpty && tryReleaseNow(latencyReady, now, packet) -> release(packet)
+            arrival.allowImmediate && lanesEmpty && tryReleaseNow(latencyReady, now, packet) -> release(packet)
             // Tail-drop por bytes de lo que se encola. Un paquete de control relegado detrás de su
             // flujo no se descarta.
             !demoted && bulkBytes + packet.size > bulkCapacityBytes -> drop(packet)
             else -> {
-                lastBulkScheduledMs = latencyReady
+                if (!arrival.reordered) lastBulkScheduledMs = latencyReady
                 latencyQueue.enqueueWithScheduledTime(packet, latencyReady, now, flowId)
                 bulkBytes += packet.size
                 if (flowId != DelayedPacket.NO_FLOW) bulkPacketsByFlow.merge(flowId, 1, Int::plus)
@@ -192,9 +214,13 @@ class ThrottlingEngine(
     private fun tryReleaseNow(latencyReady: Long, now: Long, packet: ByteArray): Boolean =
         latencyReady <= now && bandwidthLimiter.tryConsume(packet.size)
 
-    /** Instante en que el paquete cumple su latencia, sin adelantar al anterior del carril (FIFO). */
-    private fun laneSchedule(now: Long, laneEmpty: Boolean, lastScheduled: Long): Long {
-        val latencyScheduled = now + latencyQueue.calculateDelayMs()
+    /**
+     * Instante en que el paquete cumple su latencia, sin adelantar al anterior del carril (FIFO). Un
+     * paquete reordenado sale sin latencia y adelanta a los que esperan.
+     */
+    private fun laneSchedule(arrival: Arrival, laneEmpty: Boolean, lastScheduled: Long): Long {
+        if (arrival.reordered) return arrival.now
+        val latencyScheduled = arrival.now + latencyQueue.calculateDelayMs(arrival.now)
         return if (laneEmpty) latencyScheduled else max(latencyScheduled, lastScheduled)
     }
 
@@ -285,12 +311,20 @@ class ThrottlingEngine(
         jitterMs: Int,
         packetLossPercent: Float
     ) {
-        bandwidthLimiter.updateRate(newBytesPerSecond = kbpsToBytesPerSecond(rateKbps))
+        updateParameters(ImpairmentParams(rateKbps, latencyMs, jitterMs, packetLossPercent))
+    }
+
+    /** Actualiza todos los parámetros de degradación de esta dirección de forma sincronizada. */
+    @Synchronized
+    fun updateParameters(params: ImpairmentParams) {
+        bandwidthLimiter.updateRate(newBytesPerSecond = kbpsToBytesPerSecond(params.rateKbps))
         latencyQueue.updateLatencyAndJitter(
-            newBaseLatencyMs = max(0L, latencyMs.toLong()),
-            newJitterMs = max(0L, jitterMs.toLong())
+            newBaseLatencyMs = max(0L, params.latencyMs.toLong()),
+            newJitterMs = max(0L, params.jitterMs.toLong())
         )
-        packetLossSimulator.updateLossPercent(packetLossPercent)
+        packetLossSimulator.updateLossPercent(params.lossPercent)
+        packetLossSimulator.updateBurstLength(params.lossBurstLength)
+        reorderProbability = params.reorderPercent / PERCENT
     }
 
     /**
@@ -298,12 +332,7 @@ class ThrottlingEngine(
      */
     @Synchronized
     fun updateConfig(config: ThrottleConfig) {
-        updateParameters(
-            rateKbps = config.downKbps,
-            latencyMs = config.latencyMs,
-            jitterMs = config.jitterMs,
-            packetLossPercent = config.packetLossPercent
-        )
+        updateParameters(config.downlinkParams())
     }
 
     /**
@@ -362,6 +391,7 @@ class ThrottlingEngine(
         private const val BITS_PER_KILOBIT = 1000L
         private const val BITS_PER_BYTE = 8L
         private const val MIN_RATE_BYTES_PER_SECOND = 1024L
+        private const val PERCENT = 100.0
 
         /** Tasa del token bucket en B/s, con un mínimo de 1 KB/s. */
         fun kbpsToBytesPerSecond(rateKbps: Int): Long =
@@ -376,20 +406,26 @@ class ThrottlingEngine(
             jitterMs: Int,
             packetLossPercent: Float,
             clock: MonotonicClock = MonotonicClock.SYSTEM
-        ): ThrottlingEngine {
-            val bytesPerSec = kbpsToBytesPerSecond(rateKbps)
+        ): ThrottlingEngine = createPipeline(ImpairmentParams(rateKbps, latencyMs, jitterMs, packetLossPercent), clock)
+
+        /**
+         * Crea el pipeline de una dirección con todos sus parámetros de degradación.
+         */
+        fun createPipeline(params: ImpairmentParams, clock: MonotonicClock = MonotonicClock.SYSTEM): ThrottlingEngine {
+            val bytesPerSec = kbpsToBytesPerSecond(params.rateKbps)
             val limiter = TokenBucketLimiter(
                 bytesPerSecond = bytesPerSec,
                 burstCapacityBytes = TokenBucketLimiter.defaultBurstCapacity(bytesPerSec),
                 clock = clock
             )
             val queue = LatencyQueue(
-                baseLatencyMs = max(0L, latencyMs.toLong()),
-                jitterMs = max(0L, jitterMs.toLong()),
+                baseLatencyMs = max(0L, params.latencyMs.toLong()),
+                jitterMs = max(0L, params.jitterMs.toLong()),
                 clock = clock
             )
             val lossSim = PacketLossSimulator(
-                initialLossProbability = (packetLossPercent / 100.0).toDouble()
+                initialLossProbability = params.lossPercent / PERCENT,
+                initialBurstLength = params.lossBurstLength
             )
 
             return ThrottlingEngine(
@@ -397,20 +433,12 @@ class ThrottlingEngine(
                 latencyQueue = queue,
                 packetLossSimulator = lossSim,
                 clock = clock
-            )
+            ).also { it.reorderProbability = params.reorderPercent / PERCENT }
         }
 
         fun fromConfig(
             config: ThrottleConfig,
             clock: MonotonicClock = MonotonicClock.SYSTEM
-        ): ThrottlingEngine {
-            return createPipeline(
-                rateKbps = config.downKbps,
-                latencyMs = config.latencyMs,
-                jitterMs = config.jitterMs,
-                packetLossPercent = config.packetLossPercent,
-                clock = clock
-            )
-        }
+        ): ThrottlingEngine = createPipeline(config.downlinkParams(), clock)
     }
 }
