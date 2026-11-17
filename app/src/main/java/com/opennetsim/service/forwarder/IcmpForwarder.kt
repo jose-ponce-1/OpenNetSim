@@ -74,7 +74,8 @@ class IcmpForwarder(
 
     /** Procesa un paquete IPv4 ICMP saliente del TUN. Solo se reenvían los Echo Request. */
     fun processOutboundIpv4(ipPacket: IpPacket) {
-        val icmp = IcmpPacket.parse(ipPacket.payload)?.takeIf { it.isEchoRequestV4 } ?: return
+        val icmp = IcmpPacket.parse(ipPacket.payloadBuffer, ipPacket.payloadOffset, ipPacket.payloadSize)
+            ?.takeIf { it.isEchoRequestV4 } ?: return
         enqueue(
             SessionKey(ipPacket.sourceIpString, ipPacket.destinationIpString, icmp.identifier, false),
             ipPacket.sourceIp,
@@ -85,7 +86,8 @@ class IcmpForwarder(
 
     /** Procesa un paquete IPv6 ICMPv6 saliente del TUN. Solo se reenvían los Echo Request. */
     fun processOutboundIpv6(ipv6Packet: Ipv6Packet) {
-        val icmp = IcmpPacket.parse(ipv6Packet.payload)?.takeIf { it.isEchoRequestV6 } ?: return
+        val icmp = IcmpPacket.parse(ipv6Packet.payloadBuffer, ipv6Packet.payloadOffset, ipv6Packet.payloadSize)
+            ?.takeIf { it.isEchoRequestV6 } ?: return
         enqueue(
             SessionKey(ipv6Packet.sourceIpString, ipv6Packet.destinationIpString, icmp.identifier, true),
             ipv6Packet.sourceIp,

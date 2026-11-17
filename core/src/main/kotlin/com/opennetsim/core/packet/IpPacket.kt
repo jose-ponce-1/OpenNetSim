@@ -4,8 +4,14 @@ import java.nio.ByteBuffer
 
 /**
  * Representación y parser de paquetes IPv4 (RFC 791).
+ *
+ * El payload es una vista: está en [payloadBuffer] entre [payloadOffset] y [payloadOffset] +
+ * [payloadSize]. Tras [parse], [payloadBuffer] es el paquete original y no se copia nada; los
+ * parsers de transporte leen directamente de ahí. [payload] da un array propio, copiado la primera vez
+ * que se pide si la vista no ocupa el array entero.
  */
-data class IpPacket(
+@Suppress("LongParameterList") // Campos de la cabecera IPv4, casi todos con valor por defecto.
+class IpPacket(
     val version: Int = 4,
     val ihl: Int = 5,
     val dscpEcn: Int = 0,
@@ -18,12 +24,33 @@ data class IpPacket(
     val headerChecksum: Int = 0,
     val sourceIp: ByteArray,
     val destinationIp: ByteArray,
-    val payload: ByteArray
+    payload: ByteArray,
+    val payloadOffset: Int = 0,
+    val payloadSize: Int = payload.size - payloadOffset
 ) {
     init {
         require(sourceIp.size == 4) { "sourceIp debe tener exactamente 4 bytes" }
         require(destinationIp.size == 4) { "destinationIp debe tener exactamente 4 bytes" }
+        require(payloadOffset >= 0 && payloadSize >= 0 && payloadOffset + payloadSize <= payload.size) {
+            "La vista del payload se sale del array"
+        }
     }
+
+    /** Array que contiene el payload; tras [parse], el paquete entero. */
+    val payloadBuffer: ByteArray = payload
+
+    private var ownedPayload: ByteArray? = null
+
+    /** Payload en un array propio. Sin copia si la vista ocupa todo [payloadBuffer]. */
+    val payload: ByteArray
+        get() = ownedPayload ?: copyPayload().also { ownedPayload = it }
+
+    private fun copyPayload(): ByteArray =
+        if (payloadOffset == 0 && payloadSize == payloadBuffer.size) {
+            payloadBuffer
+        } else {
+            payloadBuffer.copyOfRange(payloadOffset, payloadOffset + payloadSize)
+        }
 
     val sourceIpString: String
         get() = formatIp(sourceIp)
@@ -36,7 +63,7 @@ data class IpPacket(
      */
     fun toByteArray(): ByteArray {
         val headerLength = ihl * 4
-        val totalPacketLength = headerLength + payload.size
+        val totalPacketLength = headerLength + payloadSize
         val buffer = ByteBuffer.allocate(totalPacketLength)
 
         // Byte 0: Version (4 bits) + IHL (4 bits)
@@ -78,7 +105,7 @@ data class IpPacket(
 
         // Payload
         buffer.position(headerLength)
-        buffer.put(payload)
+        buffer.put(payloadBuffer, payloadOffset, payloadSize)
 
         return buffer.array()
     }
@@ -112,6 +139,42 @@ data class IpPacket(
         const val PROTOCOL_TCP = 6
         const val PROTOCOL_UDP = 17
         const val PROTOCOL_ICMP = 1
+
+        /** Cabecera sin opciones (IHL = 5), la única que construye la app. */
+        const val HEADER_SIZE = 20
+        private const val VERSION_IHL = 0x45
+        private const val DEFAULT_TTL = 64
+        private const val TOTAL_LENGTH_OFFSET = 2
+        private const val TTL_OFFSET = 8
+        private const val PROTOCOL_OFFSET = 9
+        private const val CHECKSUM_OFFSET = 10
+        private const val SOURCE_OFFSET = 12
+        private const val DESTINATION_OFFSET = 16
+        private const val ADDRESS_BYTES = 4
+
+        /**
+         * Escribe en [out] desde [offset] una cabecera IPv4 de [HEADER_SIZE] bytes con su checksum, para
+         * un paquete de [totalLength] bytes. Es la misma cabecera que [toByteArray] con los valores por
+         * defecto (identificación 0, sin flags, TTL 64); el resto de [out] debe estar a cero.
+         */
+        @Suppress("LongParameterList")
+        fun writeHeader(
+            out: ByteArray,
+            offset: Int,
+            protocol: Int,
+            totalLength: Int,
+            sourceIp: ByteArray,
+            destinationIp: ByteArray
+        ) {
+            out[offset] = VERSION_IHL.toByte()
+            PacketBytes.writeU16(out, offset + TOTAL_LENGTH_OFFSET, totalLength)
+            out[offset + TTL_OFFSET] = DEFAULT_TTL.toByte()
+            out[offset + PROTOCOL_OFFSET] = protocol.toByte()
+            System.arraycopy(sourceIp, 0, out, offset + SOURCE_OFFSET, ADDRESS_BYTES)
+            System.arraycopy(destinationIp, 0, out, offset + DESTINATION_OFFSET, ADDRESS_BYTES)
+            val checksum = ChecksumUtils.calculateChecksum(out, offset, HEADER_SIZE)
+            PacketBytes.writeU16(out, offset + CHECKSUM_OFFSET, checksum)
+        }
 
         fun formatIp(ipBytes: ByteArray): String {
             if (ipBytes.size != 4) return "0.0.0.0"
@@ -155,13 +218,6 @@ data class IpPacket(
             val sourceIp = data.copyOfRange(offset + 12, offset + 16)
             val destinationIp = data.copyOfRange(offset + 16, offset + 20)
 
-            val payloadLength = totalLength - headerLength
-            val payload = if (payloadLength > 0) {
-                data.copyOfRange(offset + headerLength, offset + totalLength)
-            } else {
-                ByteArray(0)
-            }
-
             return IpPacket(
                 version = version,
                 ihl = ihl,
@@ -175,7 +231,10 @@ data class IpPacket(
                 headerChecksum = headerChecksum,
                 sourceIp = sourceIp,
                 destinationIp = destinationIp,
-                payload = payload
+                payload = data,
+                payloadOffset = offset + headerLength,
+                // Como antes de la vista: un totalLength menor que la cabecera da un payload vacío.
+                payloadSize = (totalLength - headerLength).coerceAtLeast(0)
             )
         }
     }
