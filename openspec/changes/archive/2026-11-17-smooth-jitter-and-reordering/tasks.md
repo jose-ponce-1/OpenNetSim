@@ -11,4 +11,4 @@
 
 ## 3. Verificación
 - [x] 3.1 Ejecutar `detekt`, `lintDebug`, `testDebugUnitTest` y `assembleDebug`; verificar que terminan bien
-- [ ] 3.2 En dispositivo: con "Wi-Fi Inestable", `ping -i 0.2` muestra RTT variables sin saltos de orden (`icmp_seq` consecutivos) y una descarga no pierde caudal frente a jitter 0; con reordenación al 10 % la descarga sigue completándose
+- [x] 3.2 En dispositivo: con "Wi-Fi Inestable", `ping -i 0.2` muestra RTT variables sin saltos de orden (`icmp_seq` consecutivos) y una descarga no pierde caudal frente a jitter 0; con reordenación al 10 % la descarga sigue completándose — verificado por el usuario en dispositivo con `app-debug.apk` (17/11/2026: "todo funciona")

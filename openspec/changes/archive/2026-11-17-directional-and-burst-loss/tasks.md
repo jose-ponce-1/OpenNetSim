@@ -13,4 +13,4 @@
 
 ## 4. Verificación
 - [x] 4.1 Ejecutar `detekt`, `lintDebug`, `testDebugUnitTest` y `assembleDebug`; verificar que terminan bien
-- [ ] 4.2 En dispositivo: reabrir la app con una configuración guardada antes de este cambio (se conserva la pérdida en ambas direcciones); 10 % solo de bajada → la subida no pierde; ráfaga 5 con "Wi-Fi Inestable" → una descarga sigue completándose
+- [x] 4.2 En dispositivo: reabrir la app con una configuración guardada antes de este cambio (se conserva la pérdida en ambas direcciones); 10 % solo de bajada → la subida no pierde; ráfaga 5 con "Wi-Fi Inestable" → una descarga sigue completándose — verificado por el usuario en dispositivo con `app-debug.apk` (17/11/2026: "todo funciona")

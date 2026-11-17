@@ -10,4 +10,4 @@
 
 ## 3. Verificación
 - [x] 3.1 Ejecutar `detekt`, `lintDebug`, `testDebugUnitTest` y `assembleDebug`; verificar que terminan bien
-- [ ] 3.2 En dispositivo: `ping 8.8.8.8` con el perfil "Alta Latencia" (RTT ≈ real + 600 ms) y `ping 10.255.255.1` (sin respuesta); verificar en Logcat que no hay errores `icmp.open`
+- [x] 3.2 En dispositivo: `ping 8.8.8.8` con el perfil "Alta Latencia" (RTT ≈ real + 600 ms) y `ping 10.255.255.1` (sin respuesta); verificar en Logcat que no hay errores `icmp.open` — verificado por el usuario en dispositivo con `app-debug.apk` (17/11/2026: "todo funciona")

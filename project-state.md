@@ -96,12 +96,12 @@ Decisiones del usuario (17/11/2026), tomadas comparando con `tc netem`, Network 
 - [x] `smooth-jitter-and-reordering`: jitter continuo que nunca reordena ni sesga la latencia bajo carga (hallazgo 8) y control aparte de reordenación (0–25 %).
 - [x] `directional-and-burst-loss`: pérdida de subida y de bajada por separado y en ráfagas (modelo de Gilbert, ráfaga media 1–10); migración de configuraciones guardadas.
 - [x] 175 tests JVM en verde (1 omitido en Windows), `detekt`, `lintDebug` y `assembleDebug` sin errores.
-- [ ] Verificación en dispositivo (última tarea de cada cambio) y archivado con `/opsx:archive`.
+- [x] Verificación en dispositivo con `app-debug.apk` (usuario, 17/11/2026: todo funciona) y CI en verde; los tres cambios archivados en `openspec/changes/archive/2026-11-17-*`.
 
 ---
 
 ## Punto de Retorno (Checkpoint)
-- **Últimos archivos modificados:** `core/engine/` (`JitterProcess`, `ImpairmentParams`, `PacketLossSimulator`, motor), `model/ThrottleConfig.kt`, `service/forwarder/` (`IcmpForwarder`, `IcmpEchoTransport`, `AndroidIcmpEchoTransport`), `service/pipeline/`, `ui/` (`DashboardActions`) y `openspec/changes/` (Fase 9, en `feat/network-fidelity`).
-- **Estado General:** Fases 1–8 cerradas; Fase 9 implementada y probada en JVM, pendiente de verificación en dispositivo.
+- **Últimos archivos modificados:** `core/engine/` (`JitterProcess`, `ImpairmentParams`, `PacketLossSimulator`, motor), `model/ThrottleConfig.kt`, `service/forwarder/` (`IcmpForwarder`, `IcmpEchoTransport`, `AndroidIcmpEchoTransport`), `service/pipeline/`, `ui/` (`DashboardActions`) y `openspec/changes/` (Fase 9, PR #5 de `feat/network-fidelity` hacia `develop`).
+- **Estado General:** Fases 1–9 cerradas y verificadas en dispositivo; sin cambios OpenSpec abiertos.
 - **Artefacto de Distribución:** APK de depuración en `app/build/outputs/apk/debug/app-debug.apk`.
-- **Siguiente acción inmediata:** Probar en dispositivo el ping real, el jitter/reordenación y la pérdida por dirección y en ráfagas (tareas pendientes de los tres cambios); después, el módulo `:core` y el version catalog (paso 2 de la hoja de ruta).
+- **Siguiente acción inmediata:** Fusionar el PR #5 en `develop`; después, el módulo `:core` y el version catalog (paso 2 de la hoja de ruta).
