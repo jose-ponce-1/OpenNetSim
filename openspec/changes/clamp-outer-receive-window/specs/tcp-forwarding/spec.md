@@ -2,10 +2,10 @@
 
 ### Requirement: Recepción del socket exterior sin tope artificial
 El búfer de recepción del socket exterior SHALL ser suficiente para el caudal de bajada configurado
-con la latencia real del camino, de modo que no sea el factor limitante del caudal. A la vez, la
-ventana que el socket exterior anuncia al servidor SHALL estar acotada en proporción a la red simulada
-(caudal de bajada × (latencia + jitter + ventana de cola del motor)), para que el servidor no tenga en
-vuelo hacia el túnel más datos de los que esa red admitiría; el tope SHALL reajustarse también en las
+con la latencia real del camino, de modo que no sea el factor limitante del caudal. A la vez, los
+datos pendientes de cada socket exterior (sin leer por el túnel o en vuelo desde el servidor) SHALL
+estar acotados en proporción a la red simulada (caudal de bajada × (latencia + jitter + ventana de cola
+del motor)), para que el servidor no dé por entregados más datos de los que esa red admitiría; el tope SHALL reajustarse también en las
 conexiones abiertas cuando cambia la configuración.
 
 #### Scenario: Perfil de 5 Mbps con servidor a 80 ms
@@ -18,4 +18,4 @@ conexiones abiertas cuando cambia la configuración.
 
 #### Scenario: Cambio de velocidad con la conexión abierta
 - **WHEN** se cambia la velocidad de bajada configurada durante una descarga
-- **THEN** el tope de la ventana de esa conexión se ajusta al nuevo valor sin esperar a conexiones nuevas
+- **THEN** el tope de esa conexión se ajusta al nuevo valor sin esperar a conexiones nuevas

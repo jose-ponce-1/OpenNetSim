@@ -185,8 +185,9 @@ class TcpForwarder(
     }
 
     /**
-     * Acota lo que el servidor puede tener en vuelo hacia esta sesión. Se aplica con el socket ya
-     * conectado: la escala de ventana se negocia en el SYN sin tope, y así el tope puede subir después.
+     * Acota lo que esta sesión puede tener pendiente hacia el túnel (cola sin leer más datos en vuelo).
+     * Se aplica con el socket ya conectado: la escala de ventana se negocia en el SYN sin tope, y así el
+     * tope puede subir después.
      */
     private fun clampReceiveWindow(session: Session) {
         val bytes = receiveWindowClampBytes
@@ -194,12 +195,15 @@ class TcpForwarder(
         try {
             environment.receiveWindowClamp.apply(session.channel.socket(), bytes)
         } catch (e: IOException) {
-            // La sesión sigue sin tope, como antes; se avisa una sola vez.
-            if (!receiveWindowClampUnavailableReported) {
-                receiveWindowClampUnavailableReported = true
-                diagnostics.warn("tcp.clamp", "No se pudo acotar la ventana de recepción de los sockets exteriores", e)
-            }
+            reportClampUnavailable(e) // La sesión sigue sin tope, como antes.
         }
+    }
+
+    /** Avisa una sola vez de que el tope no se puede aplicar en este sistema. */
+    private fun reportClampUnavailable(error: IOException) {
+        if (receiveWindowClampUnavailableReported) return
+        receiveWindowClampUnavailableReported = true
+        diagnostics.warn("tcp.clamp", "No se pudo acotar la ventana de recepción de los sockets exteriores", error)
     }
 
     /** El pipeline de bajada vuelve a admitir datos: reanudar lecturas pausadas. */

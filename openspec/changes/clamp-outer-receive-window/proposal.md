@@ -11,16 +11,15 @@ enseguida, mide menos de lo configurado. Los emuladores en el kernel (netem, Net
 no tienen esta cola oculta porque no terminan la conexión.
 
 ## What Changes
-- Tope de la ventana de recepción de cada socket TCP exterior con `TCP_WINDOW_CLAMP`:
+- Tope de los datos pendientes de cada socket TCP exterior (cola sin leer más ventana anunciada):
   `clamp(tasaBajada × (latencia + jitter + 500 ms), 64 KB, 4 MB)`.
-- Se aplica al terminar de conectar y se reajusta en las conexiones abiertas al cambiar la
-  configuración.
-- No se usa `SO_RCVBUF`: fijaría el búfer al abrir el socket, desactivaría el autoajuste y no se
-  podría cambiar en conexiones abiertas.
+- Se aplica con `SO_RCVBUF` (la mitad del tope; Linux reserva el doble), que es lo que acota la cola sin
+  leer, y `TCP_WINDOW_CLAMP` al mismo valor, para que la ventana pueda crecer hasta el tope.
+- Ambos se fijan al terminar de conectar, no antes (la escala de ventana se negocia en el SYN sin tope),
+  y se reajustan en las conexiones abiertas al cambiar la configuración.
 
 ## Fuera de alcance
-UDP (QUIC): no hay ventana de recepción que acotar. Re-aplicar el tope si el autoajuste del kernel lo
-sube (ver design, riesgos): solo si la verificación en dispositivo lo muestra.
+UDP (QUIC): no hay ventana de recepción que acotar.
 
 ## Capabilities
 ### New Capabilities

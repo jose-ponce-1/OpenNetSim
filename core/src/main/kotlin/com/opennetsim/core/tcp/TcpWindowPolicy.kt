@@ -32,8 +32,8 @@ object TcpWindowPolicy {
     }
 
     /**
-     * Ventana de recepción máxima del socket exterior (lo que el servidor puede tener en vuelo hacia el
-     * túnel): `clamp(tasaBajada × (latencia + jitter + ventana de cola del motor), 64 KB, 4 MB)`.
+     * Datos que un socket exterior puede tener pendientes hacia el túnel (cola sin leer más ventana
+     * anunciada): `clamp(tasaBajada × (latencia + jitter + ventana de cola del motor), 64 KB, 4 MB)`.
      *
      * Sin tope, el kernel acepta varios MB por conexión mientras el túnel no lee (contrapresión del
      * motor), y el servidor da por entregados segundos de datos que la red simulada no admitiría. Con
