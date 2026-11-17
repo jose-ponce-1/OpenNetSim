@@ -14,6 +14,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * @param clock Reloj monotónico de timeouts e inactividad; el mismo que usa el motor.
  * @param strictThreadChecks Si es true, cualquier operación sobre el selector o el estado de sesión
  * fuera del hilo del selector lanza [IllegalStateException] (solo para tests).
+ * @param receiveWindowClamp Tope de la ventana de recepción de los sockets TCP exteriores.
  */
 data class ForwarderEnvironment(
     val socketProtector: VpnSocketProtector,
@@ -21,7 +22,8 @@ data class ForwarderEnvironment(
     val bufferPool: ByteBufferPool = ByteBufferPool.defaultInstance,
     val diagnostics: NetDiagnostics = NetDiagnostics.NONE,
     val clock: MonotonicClock = MonotonicClock.SYSTEM,
-    val strictThreadChecks: Boolean = false
+    val strictThreadChecks: Boolean = false,
+    val receiveWindowClamp: ReceiveWindowClamp = ReceiveWindowClamp.NONE
 )
 
 /**

@@ -129,6 +129,10 @@ class TcpForwarder(
     private val clock = environment.clock
     private val rejectedSynCounter = AtomicLong(0L)
 
+    /** Tope de la ventana de recepción de los sockets exteriores; null hasta [updateDegradation]. */
+    private var receiveWindowClampBytes: Int? = null
+    private var receiveWindowClampUnavailableReported = false
+
     // Solo el hilo del selector escribe; ConcurrentHashMap permite leer el tamaño desde otros hilos.
     private val sessions = ConcurrentHashMap<SessionKey, Session>()
     private val selector: Selector = Selector.open()
@@ -163,14 +167,38 @@ class TcpForwarder(
     fun rejectedSynCount(): Long = rejectedSynCounter.get()
 
     /**
-     * Ajusta el tope de bytes en vuelo y el RTO inicial a la degradación configurada.
+     * Ajusta a la degradación configurada el tope de bytes en vuelo, el RTO inicial y la ventana de
+     * recepción de los sockets exteriores, también en las conexiones ya abiertas.
      */
     fun updateDegradation(downKbps: Int, latencyMs: Int, jitterMs: Int) {
         val maxInFlight = TcpWindowPolicy.bdpCapBytes(downKbps, latencyMs, jitterMs)
         val initialRto = TcpWindowPolicy.initialRtoMs(latencyMs, jitterMs)
+        val receiveWindow = TcpWindowPolicy.receiveWindowClampBytes(downKbps, latencyMs, jitterMs)
         taskQueue.post {
             tcpConfig = tcpConfig.copy(maxInFlightBytes = maxInFlight, initialRtoMs = initialRto)
-            sessions.values.forEach { it.connection.maxInFlightBytes = maxInFlight }
+            receiveWindowClampBytes = receiveWindow
+            sessions.values.forEach {
+                it.connection.maxInFlightBytes = maxInFlight
+                clampReceiveWindow(it)
+            }
+        }
+    }
+
+    /**
+     * Acota lo que el servidor puede tener en vuelo hacia esta sesión. Se aplica con el socket ya
+     * conectado: la escala de ventana se negocia en el SYN sin tope, y así el tope puede subir después.
+     */
+    private fun clampReceiveWindow(session: Session) {
+        val bytes = receiveWindowClampBytes
+        if (bytes == null || session.removed || !session.channel.isConnected) return
+        try {
+            environment.receiveWindowClamp.apply(session.channel.socket(), bytes)
+        } catch (e: IOException) {
+            // La sesión sigue sin tope, como antes; se avisa una sola vez.
+            if (!receiveWindowClampUnavailableReported) {
+                receiveWindowClampUnavailableReported = true
+                diagnostics.warn("tcp.clamp", "No se pudo acotar la ventana de recepción de los sockets exteriores", e)
+            }
         }
     }
 
@@ -296,7 +324,10 @@ class TcpForwarder(
             val connected = channel.connect(InetSocketAddress(InetAddress.getByAddress(serverIp), key.serverPort))
             val interest = if (connected) SelectionKey.OP_READ else SelectionKey.OP_CONNECT
             session.selectionKey = channel.register(selector, interest, session)
-            if (connected) session.connection.onUpstreamConnected(now)
+            if (connected) {
+                clampReceiveWindow(session)
+                session.connection.onUpstreamConnected(now)
+            }
         } catch (e: IOException) {
             diagnostics.warn("tcp.connect", "Conexión rechazada hacia ${describe(key)}: ${e.message}", e)
             session.connection.abort()
@@ -403,6 +434,7 @@ class TcpForwarder(
         try {
             if (session.channel.finishConnect()) {
                 session.selectionKey?.interestOps(SelectionKey.OP_READ)
+                clampReceiveWindow(session)
                 session.connection.onUpstreamConnected(clock.nowMs())
             }
         } catch (e: IOException) {
