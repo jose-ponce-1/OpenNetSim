@@ -110,13 +110,19 @@ Decisiones del usuario (17/11/2026), tomadas comparando con `tc netem`, Network 
 - [x] 176 tests (1 omitido en Windows), `detekt`, `lintDebug` y `assembleDebug` en verde.
 - [x] CI de GitHub Actions en verde y verificación en dispositivo; cambio archivado.
 
+### Fase 12: Preparar la release (cambio OpenSpec `release-prep`, rama `feat/release-prep`)
+- [x] R8 y reducción de recursos en release (APK de 16,6 MB a ~1 MB); `ThrottlePreset` conservado porque se guarda por su nombre. La CI compila la release.
+- [x] Firma desde propiedades de Gradle `openNetSimRelease*` fuera del repositorio; sin ellas, release sin firmar.
+- [x] Icono propio en la notificación y texto de la tarjeta informativa corregido.
+- [ ] Keystore de release (lo crea el usuario), CI y verificación en dispositivo de la release firmada.
+
 ---
 
 ## Hoja de Ruta
 1. ~~Fidelidad de la simulación~~ (Fase 9).
 2. ~~Módulo `:core` y version catalog~~ (Fase 10).
 3. ~~Actualizar AGP, Kotlin y Gradle~~ (Fase 11). Queda un aviso de Gradle 10 que viene del plugin de detekt 1.23.8: se resuelve con detekt 2.0 cuando sea estable. Pendiente aparte: Compose BOM, AndroidX y corrutinas.
-4. Preparar la release: R8, firma, icono propio en la notificación y corregir el texto de la tarjeta informativa ("No se envían paquetes fuera de tu dispositivo" no es cierto).
+4. ~~Preparar la release~~ (Fase 12).
 5. Rendimiento y deuda: microbenchmark del camino de cada paquete antes de optimizar, reducir las baselines de detekt y medir cobertura con Kover.
 6. Nueva interfaz (pedido por el usuario el 17/11/2026):
    - Sustituir los sliders por campos para escribir el valor exacto (ancho de banda en kbps/Mbps, como otras apps; también latencia, jitter y porcentajes).
@@ -126,7 +132,7 @@ Decisiones del usuario (17/11/2026), tomadas comparando con `tc netem`, Network 
 ---
 
 ## Punto de Retorno (Checkpoint)
-- **Últimos archivos modificados:** `gradle/libs.versions.toml`, `build.gradle.kts`, `app/build.gradle.kts`, `IcmpEchoTransport.kt`, README y `openspec/changes/archive/` (Fase 11).
+- **Últimos archivos modificados:** `app/build.gradle.kts`, `app/proguard-rules.pro`, `ic_stat_opennetsim.xml`, `TunnelNotifications.kt`, `ThrottleDashboardScreen.kt`, `.github/workflows/ci.yml` y documentación (Fase 12, rama `feat/release-prep`).
 - **Estado General:** Fases 1–11 cerradas, verificadas en dispositivo y fusionadas en `develop` (PR #5, #6 y #7); `main` sigue sin estos cambios.
 - **Artefacto de Distribución:** APK de depuración en `app/build/outputs/apk/debug/app-debug.apk`.
-- **Siguiente acción inmediata:** el paso 4 de la hoja de ruta (preparar la release).
+- **Siguiente acción inmediata:** crear el keystore de release y verificar la release firmada en dispositivo (Fase 12); después, el paso 5 de la hoja de ruta.

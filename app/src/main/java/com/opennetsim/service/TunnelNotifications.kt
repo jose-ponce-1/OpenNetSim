@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
+import com.opennetsim.R
 import com.opennetsim.model.ThrottleConfig
 import com.opennetsim.ui.MainActivity
 
@@ -59,7 +60,7 @@ class TunnelNotifications(private val context: Context) {
         return NotificationCompat.Builder(context, CHANNEL_ID)
             .setContentTitle("OpenNetSim Activo")
             .setContentText(contentText)
-            .setSmallIcon(android.R.drawable.stat_notify_sync)
+            .setSmallIcon(R.drawable.ic_stat_opennetsim)
             .setContentIntent(openAppPendingIntent)
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Detener", stopPendingIntent)
             .setOngoing(true)

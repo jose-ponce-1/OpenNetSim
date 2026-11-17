@@ -18,9 +18,10 @@ Ejecuta la suite de pruebas unitarias locales:
 - *Orden de entrega en la cola de retardo (simulación de latencia/ping).*
 - *Porcentaje exacto de paquetes descartados en la simulación de pérdida.*
 
-## 3. Ensamblado del APK (Debug)
+## 3. Ensamblado del APK
 1. Ejecuta `./gradlew assembleDebug`.
 2. Comprueba que el archivo `.apk` se genere correctamente en `app/build/outputs/apk/debug/`.
+3. Si el cambio puede afectar a R8 (clases usadas por nombre, reflexión, persistencia de nombres de enum), ejecuta `./gradlew :app:assembleRelease` y revisa `app/proguard-rules.pro`.
 
 ## 4. Auditoría de Manifiesto
 Verifica que `AndroidManifest.xml` incluya:

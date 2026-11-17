@@ -21,7 +21,6 @@
     <ID>MagicNumber:Color.kt$0xFFF43F5E</ID>
     <ID>MagicNumber:Color.kt$0xFFF59E0B</ID>
     <ID>MagicNumber:Color.kt$0xFFF8FAFC</ID>
-    <ID>MaxLineLength:ThrottleDashboardScreen.kt$text = "OpenNetSim intercepta el tráfico en un bucle local mediante Android VpnService. No se envían paquetes fuera de tu dispositivo ni se requiere acceso root."</ID>
     <ID>MaximumLineLength:ThrottleDashboardScreen.kt$ </ID>
     <ID>NestedBlockDepth:TcpForwarderTest.kt$TcpForwarderTest$@Test fun testOutOfOrderSegmentBufferingAndAssembly()</ID>
     <ID>ParameterNaming:ThrottleDashboardScreen.kt$onPresetSelected</ID>
