@@ -98,10 +98,30 @@ Decisiones del usuario (17/11/2026), tomadas comparando con `tc netem`, Network 
 - [x] 175 tests JVM en verde (1 omitido en Windows), `detekt`, `lintDebug` y `assembleDebug` sin errores.
 - [x] Verificación en dispositivo con `app-debug.apk` (usuario, 17/11/2026: todo funciona) y CI en verde; los tres cambios archivados en `openspec/changes/archive/2026-11-17-*`.
 
+### Fase 10: Módulo `:core` y version catalog (cambio OpenSpec `extract-core-module`, rama `refactor/core-module`)
+- [x] `core/` y `model/` en el módulo Gradle `:core`, Kotlin/JVM puro: un `import android.*` ya no compila.
+- [x] Version catalog `gradle/libs.versions.toml` (mismas versiones); detekt configurado en el script raíz con una baseline por módulo (127 entradas, antes 142, ninguna nueva).
+- [x] 175 tests (115 en `:core`, 60 en `:app`, 1 omitido en Windows), `detekt`, `lintDebug` y `assembleDebug` en verde.
+- [x] CI de GitHub Actions en verde con los dos módulos (PR #6); cambio archivado.
+- [x] La CI destapó una carrera en `UdpForwarder.close()` y `TcpForwarder.close()` (cerraban el selector desde otro hilo: NullPointerException del JDK en `AbstractSelector.deregister`). Ahora, como en `IcmpForwarder`, se libera todo en el hilo del bucle; test de estrés añadido. Verificado en dispositivo.
+
+---
+
+## Hoja de Ruta
+1. ~~Fidelidad de la simulación~~ (Fase 9).
+2. ~~Módulo `:core` y version catalog~~ (Fase 10).
+3. Actualizar AGP, Kotlin y Gradle (Gradle 9.7.1 está fuera de la matriz probada de AGP 8.7 y avisa de incompatibilidades con Gradle 10), comprobando antes la matriz de compatibilidad.
+4. Preparar la release: R8, firma, icono propio en la notificación y corregir el texto de la tarjeta informativa ("No se envían paquetes fuera de tu dispositivo" no es cierto).
+5. Rendimiento y deuda: microbenchmark del camino de cada paquete antes de optimizar, reducir las baselines de detekt y medir cobertura con Kover.
+6. Nueva interfaz (pedido por el usuario el 17/11/2026):
+   - Sustituir los sliders por campos para escribir el valor exacto (ancho de banda en kbps/Mbps, como otras apps; también latencia, jitter y porcentajes).
+   - Paleta de colores oficial de OpenNetSim. Colores del logo encontrados en `res/drawable` (pendientes de que el usuario confirme los oficiales o envíe prototipos): `#0067C6`, `#00C4FF`, `#67E8F9` y `#FFFFFF`.
+   - Pantalla de inicio con el logo (API SplashScreen de Android 12 mediante `androidx.core:core-splashscreen` para API 26+).
+
 ---
 
 ## Punto de Retorno (Checkpoint)
-- **Últimos archivos modificados:** `core/engine/` (`JitterProcess`, `ImpairmentParams`, `PacketLossSimulator`, motor), `model/ThrottleConfig.kt`, `service/forwarder/` (`IcmpForwarder`, `IcmpEchoTransport`, `AndroidIcmpEchoTransport`), `service/pipeline/`, `ui/` (`DashboardActions`) y `openspec/changes/` (Fase 9, PR #5 de `feat/network-fidelity` hacia `develop`).
-- **Estado General:** Fases 1–9 cerradas y verificadas en dispositivo; sin cambios OpenSpec abiertos.
+- **Últimos archivos modificados:** `core/` (módulo nuevo con `core.*` y `model.*`), `gradle/libs.versions.toml`, `build.gradle.kts`, `app/build.gradle.kts`, `settings.gradle.kts`, `config/detekt/`, `.github/workflows/ci.yml` y documentación (Fase 10, rama `refactor/core-module`, PR #6).
+- **Estado General:** Fases 1–9 cerradas y fusionadas en `develop`; Fase 10 verificada (local, CI y dispositivo), pendiente de fusionar (PR #6).
 - **Artefacto de Distribución:** APK de depuración en `app/build/outputs/apk/debug/app-debug.apk`.
-- **Siguiente acción inmediata:** Fusionar el PR #5 en `develop`; después, el módulo `:core` y el version catalog (paso 2 de la hoja de ruta).
+- **Siguiente acción inmediata:** fusionar el PR #6; después, el paso 3 de la hoja de ruta (actualizar AGP/Kotlin/Gradle).

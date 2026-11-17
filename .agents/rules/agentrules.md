@@ -8,6 +8,7 @@ trigger: always_on
 - Lenguaje: Kotlin (modo estricto, corrutinas y Flow).
 - UI: Jetpack Compose con Material 3.
 - Arquitectura desacoplada (Clean Architecture):
+  - Módulo Gradle `:core` (Kotlin/JVM puro, paquetes `core.*` y `model.*`): el compilador impide usar Android.
   - `core/engine/`: Lógica pura de throttling (algoritmo Token Bucket para límites de subida/bajada, colas de retardo para latencia/jitter, descarte probabilístico para packet loss). No debe contener dependencias de clases del framework de Android.
   - `service/`: Implementación de `VpnService`, ciclo de vida del `ForegroundService`, gestión de notificaciones persistentes y manejo de I/O en la interfaz TUN (`ParcelFileDescriptor`).
   - `ui/`: Pantallas Compose, ViewModels y estado reactivo.
@@ -18,6 +19,6 @@ trigger: always_on
 - Gestión de Memoria y Paquetes: Para evitar bloqueos del hilo principal o saturación del GC, reutiliza buffers de bytes (`ByteBuffer`) durante la lectura/escritura de la interfaz TUN.
 
 ## 3. Reglas de Terminal y Build
-- Verificación incremental: No ejecutes tareas pesadas completas innecesariamente. Valida primero con `./gradlew compileDebugKotlin` y `./gradlew testDebugUnitTest`.
-- Prohibido modificar dependencias mayores en `build.gradle.kts` sin verificar compatibilidad de versiones con el Android Gradle Plugin (AGP).
+- Verificación incremental: No ejecutes tareas pesadas completas innecesariamente. Valida primero con `./gradlew :core:compileKotlin :app:compileDebugKotlin` y `./gradlew :core:test :app:testDebugUnitTest`.
+- Las versiones están en `gradle/libs.versions.toml`. Prohibido modificar dependencias mayores sin verificar compatibilidad de versiones con el Android Gradle Plugin (AGP).
 - Tras crear o refactorizar lógica matemática del motor (Token Bucket / Colas), ejecuta siempre la suite de tests unitarios antes de dar el paso por terminado.

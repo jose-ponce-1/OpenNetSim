@@ -21,4 +21,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "OpenNetSim"
-include(":app")
+include(":app", ":core")

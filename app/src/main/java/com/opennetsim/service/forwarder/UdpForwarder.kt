@@ -88,7 +88,7 @@ class UdpForwarder(
     /** Pool dedicado de búferes de 64 KB: un datagrama UDP nunca se trunca al leerlo. */
     private val receivePool = ByteBufferPool(bufferSize = RECEIVE_BUFFER_BYTES, maxPoolSize = RECEIVE_POOL_SIZE)
 
-    // Solo el hilo del selector escribe; ConcurrentHashMap permite que close() itere con seguridad.
+    // Solo el hilo del selector escribe; ConcurrentHashMap permite leer el tamaño desde otros hilos.
     private val sessions = ConcurrentHashMap<SessionKey, Session>()
     private val selector: Selector = Selector.open()
     private val taskQueue = SelectorTaskQueue(selector, environment.strictThreadChecks)
@@ -261,7 +261,7 @@ class UdpForwarder(
 
     @Suppress("TooGenericExceptionCaught")
     private fun startWorkerLoop() {
-        workerJob = environment.coroutineScope.launch(Dispatchers.IO) {
+        val job = environment.coroutineScope.launch(Dispatchers.IO) {
             taskQueue.bindToCurrentThread()
             while (isActive && isRunning) {
                 try {
@@ -280,6 +280,11 @@ class UdpForwarder(
                 }
             }
         }
+        // Al terminar el bucle, en su hilo: cerrar el selector mientras otro hilo registra o cierra
+        // canales en él es una carrera del JDK (NullPointerException en AbstractSelector.deregister).
+        // También se ejecuta si el ámbito se cancela antes de que el bucle llegue a arrancar.
+        job.invokeOnCompletion { releaseAll() }
+        workerJob = job
     }
 
     private fun handleSelectedKeys() {
@@ -380,20 +385,23 @@ class UdpForwarder(
     private fun describe(key: SessionKey): String =
         if (key.isIpv6) "[${key.serverIp}]:${key.serverPort}" else "${key.serverIp}:${key.serverPort}"
 
-    fun close() {
-        isRunning = false
-        workerJob?.cancel()
-        workerJob = null
-        taskQueue.clear()
-
+    private fun releaseAll() {
         sessions.values.forEach { closeQuietly(it.channel) }
         sessions.clear()
-
         try {
             selector.close()
         } catch (e: IOException) {
             diagnostics.log(DiagLevel.DEBUG, "udp.close", "Error al cerrar el selector UDP", e)
         }
+    }
+
+    /** Detiene el bucle; las sesiones y el selector se cierran en el hilo del selector. */
+    fun close() {
+        isRunning = false
+        taskQueue.clear()
+        selector.wakeup()
+        workerJob?.cancel()
+        workerJob = null
     }
 
     companion object {
