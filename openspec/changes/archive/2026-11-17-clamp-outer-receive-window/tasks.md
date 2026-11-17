@@ -14,4 +14,5 @@
 - [x] 3.1 Ejecutar `detekt`, `lintDebug`, `:core:test`, `:app:testDebugUnitTest` y `assembleDebug`; verificar que terminan bien
 - [x] 3.2 Verificar en dispositivo con el test de Movistar a 10 Mbps que `rx_queue` de cada socket exterior no supera aproximadamente el tope (resultado: máx. 516 KB con tope de 625 KB; 9,69 Mbps)
 - [x] 3.3 Verificar en dispositivo a 50 Mbps, tras cambiar la velocidad con el túnel activo, que el test alcanza lo configurado, que cada socket no supera el tope y que las conexiones abiertas reciben el nuevo tope (resultado: máx. 2,56 MB con tope de 3,1 MB; 48,54 Mbps; 4 conexiones abiertas reajustadas)
-- [ ] 3.4 Verificar que la CI de GitHub Actions termina en verde
+- [x] 3.4 Verificar que la CI de GitHub Actions termina en verde (PR #11)
+- [x] 3.5 Verificar en dispositivo que recargar un test de velocidad a medias y repetirlo no baja el rendimiento (usuario, test oficial de M-Lab recargado 5–6 veces durante la prueba: sin pérdida; el de Google no se pudo repetir por bloqueo temporal de la IP)
