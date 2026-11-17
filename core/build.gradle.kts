@@ -3,6 +3,7 @@
 plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.detekt)
+    alias(libs.plugins.kover)
     `java-test-fixtures`
 }
 
@@ -19,4 +20,17 @@ kotlin {
 
 dependencies {
     testImplementation(libs.junit)
+}
+
+// Cobertura con Kover: `:core:koverVerifyCoverage` exige un mínimo de líneas cubiertas por los tests de
+// este módulo; el informe conjunto con :app está en `:app:koverHtmlReportCoverage`.
+kover {
+    currentProject {
+        createVariant("coverage") { add("jvm") }
+    }
+    reports {
+        verify {
+            rule("Cobertura mínima de líneas de :core") { minBound(85) }
+        }
+    }
 }

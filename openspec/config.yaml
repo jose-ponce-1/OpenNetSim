@@ -7,7 +7,7 @@ context: |
   `core/` y `model/` viven en el módulo Gradle `:core`, Kotlin/JVM puro: el compilador impide usar Android.
   Toda medida de tiempo del motor, de los forwarders y del servicio usa el reloj monotónico (`MonotonicClock`), nunca el reloj de pared.
   Las versiones están en `gradle/libs.versions.toml`. Prohibido cambiar versiones mayores de AGP, Kotlin, Gradle o Compose sin comprobar antes la matriz de compatibilidad de AGP.
-  La puerta de calidad es `:core:compileKotlin`, `:app:compileDebugKotlin`, `detekt`, `lintDebug`, `:core:test`, `:app:testDebugUnitTest` y `:app:assembleRelease` (R8); la CI de GitHub Actions la ejecuta en cada push y PR.
+  La puerta de calidad es `:core:compileKotlin`, `:app:compileDebugKotlin`, `detekt`, `lintDebug`, `:core:test`, `:app:testDebugUnitTest`, `:core:koverVerifyCoverage` y `:app:koverVerifyCoverage` (mínimo 85 % de líneas) y `:app:assembleRelease` (R8); la CI de GitHub Actions la ejecuta en cada push y PR.
   La firma de release se lee de propiedades de Gradle fuera del repositorio: nunca se versionan keystores ni contraseñas.
   La verificación en dispositivo o emulador es obligatoria para cambios en `service/`.
 

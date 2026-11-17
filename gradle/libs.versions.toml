@@ -8,6 +8,7 @@
 agp = "9.3.3"
 kotlin = "2.4.21"
 detekt = "1.23.8"
+kover = "0.9.11"
 composeRulesDetekt = "0.4.22"
 composeBom = "2024.10.01"
 coreKtx = "1.15.0"
@@ -44,3 +45,4 @@ android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
+kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }

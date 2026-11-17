@@ -65,6 +65,9 @@ OpenNetSim/
 # Run unit test suites (JVM without emulator)
 ./gradlew :core:test :app:testDebugUnitTest
 
+# Coverage with Kover: minimum 85% line coverage; HTML report in app/build/reports/kover/htmlCoverage
+./gradlew :core:koverVerifyCoverage :app:koverVerifyCoverage :app:koverHtmlReportCoverage
+
 # Build debug APK
 ./gradlew assembleDebug
 

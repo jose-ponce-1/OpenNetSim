@@ -118,6 +118,10 @@ Decisiones del usuario (17/11/2026), tomadas comparando con `tc netem`, Network 
 - [x] Release firmada verificada en dispositivo (túnel, cambios en caliente, configuración conservada, icono).
 - [x] CI en verde (incluye la compilación de release con R8, PR #10); cambio archivado.
 
+### Fase 13: Rendimiento y deuda (paso 5 de la hoja de ruta)
+- [x] `clamp-outer-receive-window` (PR #11): cola sin leer de los sockets TCP exteriores acotada; archivado.
+- [x] `add-kover-coverage` (rama `chore/kover-coverage`): Kover 0.9.11, informe conjunto de `:app` y `:core` sin el código que solo corre con Android o Compose. Medido: 87,6 % de líneas (66,3 % de ramas); `:core`, 86,7 %. Mínimo del 85 % de líneas en la CI.
+
 ---
 
 ## Hoja de Ruta
@@ -125,7 +129,7 @@ Decisiones del usuario (17/11/2026), tomadas comparando con `tc netem`, Network 
 2. ~~Módulo `:core` y version catalog~~ (Fase 10).
 3. ~~Actualizar AGP, Kotlin y Gradle~~ (Fase 11). Queda un aviso de Gradle 10 que viene del plugin de detekt 1.23.8: se resuelve con detekt 2.0 cuando sea estable. Pendiente aparte: Compose BOM, AndroidX y corrutinas.
 4. ~~Preparar la release~~ (Fase 12).
-5. Rendimiento y deuda: microbenchmark del camino de cada paquete antes de optimizar, reducir las baselines de detekt y medir cobertura con Kover.
+5. Rendimiento y deuda (Fase 13): microbenchmark del camino de cada paquete antes de optimizar, reducir las baselines de detekt y ~~medir cobertura con Kover~~.
    - Test de velocidad de Google cancelado y repetido enseguida (observado por el usuario el 17/11/2026 con la release): mide menos de lo configurado; si se deja terminar, el siguiente es normal. Causa medida: los sockets TCP exteriores acumulaban varios MB sin leer en el kernel (hasta 6,9 MB por conexión), que se seguían entregando por el límite. Resuelto en el cambio `clamp-outer-receive-window` (PR #11, archivado): `SO_RCVBUF` y `TCP_WINDOW_CLAMP` proporcionales a la red simulada, ajustables en caliente. Verificado por el usuario con el test oficial de M-Lab recargado 5–6 veces a mitad de prueba, sin pérdida; el de Google no se pudo repetir (IP bloqueada temporalmente).
 6. Nueva interfaz (pedido por el usuario el 17/11/2026):
    - Sustituir los sliders por campos para escribir el valor exacto (ancho de banda en kbps/Mbps, como otras apps; también latencia, jitter y porcentajes).
@@ -135,7 +139,7 @@ Decisiones del usuario (17/11/2026), tomadas comparando con `tc netem`, Network 
 ---
 
 ## Punto de Retorno (Checkpoint)
-- **Últimos archivos modificados:** `TcpWindowPolicy.kt`, `ReceiveWindowClamp.kt`, `AndroidReceiveWindowClamp.kt`, `TcpForwarder.kt`, `ForwarderEnvironment.kt`, `ThrottleVpnService.kt`, sus tests y `openspec/changes/clamp-outer-receive-window` (rama `fix/stale-flow-backlog`).
-- **Estado General:** Fases 1–11 en `develop` y `main`; Fase 12 en `develop` (PR #10). Cambio `clamp-outer-receive-window` en `develop` (PR #11) y archivado.
+- **Últimos archivos modificados:** `gradle/libs.versions.toml`, `core/build.gradle.kts`, `app/build.gradle.kts`, `.github/workflows/ci.yml`, `openspec/config.yaml`, README y `openspec/changes/add-kover-coverage` (rama `chore/kover-coverage`).
+- **Estado General:** Fases 1–11 en `develop` y `main`; Fase 12 en `develop` (PR #10). Cambio `clamp-outer-receive-window` en `develop` (PR #11) y archivado. Cambio `add-kover-coverage` verificado en local, pendiente de CI.
 - **Artefacto de Distribución:** APK de depuración en `app/build/outputs/apk/debug/app-debug.apk`; release firmada en `app/build/outputs/apk/release/app-release.apk` (keystore del usuario, fuera del repositorio).
-- **Siguiente acción inmediata:** resto del paso 5 (Kover, baselines de detekt y microbenchmark).
+- **Siguiente acción inmediata:** CI y fusión de `chore/kover-coverage`; después, baselines de detekt y microbenchmark.
