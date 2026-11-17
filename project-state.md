@@ -126,7 +126,7 @@ Decisiones del usuario (17/11/2026), tomadas comparando con `tc netem`, Network 
 3. ~~Actualizar AGP, Kotlin y Gradle~~ (Fase 11). Queda un aviso de Gradle 10 que viene del plugin de detekt 1.23.8: se resuelve con detekt 2.0 cuando sea estable. Pendiente aparte: Compose BOM, AndroidX y corrutinas.
 4. ~~Preparar la release~~ (Fase 12).
 5. Rendimiento y deuda: microbenchmark del camino de cada paquete antes de optimizar, reducir las baselines de detekt y medir cobertura con Kover.
-   - Investigar (observado por el usuario el 17/11/2026 con la release): si se cancela el test de velocidad de Google a medias y se repite enseguida, mide menos de lo configurado; si se deja terminar, el siguiente es normal. Hipótesis por comprobar: datos de las conexiones canceladas que siguen en la cola del motor o en los búferes del forwarder TCP y consumen el ancho de banda hasta vaciarse.
+   - Test de velocidad de Google cancelado y repetido enseguida (observado por el usuario el 17/11/2026 con la release): mide menos de lo configurado; si se deja terminar, el siguiente es normal. Causa medida: los sockets TCP exteriores acumulaban varios MB sin leer en el kernel (hasta 6,9 MB por conexión), que se seguían entregando por el límite. Acotado en el cambio `clamp-outer-receive-window` (`SO_RCVBUF` y `TCP_WINDOW_CLAMP` proporcionales a la red simulada, ajustables en caliente; rama `fix/stale-flow-backlog`). Pendiente: que el usuario repita el caso de Google con la release.
 6. Nueva interfaz (pedido por el usuario el 17/11/2026):
    - Sustituir los sliders por campos para escribir el valor exacto (ancho de banda en kbps/Mbps, como otras apps; también latencia, jitter y porcentajes).
    - Paleta de colores oficial de OpenNetSim. Colores del logo encontrados en `res/drawable` (pendientes de que el usuario confirme los oficiales o envíe prototipos): `#0067C6`, `#00C4FF`, `#67E8F9` y `#FFFFFF`.
@@ -135,7 +135,7 @@ Decisiones del usuario (17/11/2026), tomadas comparando con `tc netem`, Network 
 ---
 
 ## Punto de Retorno (Checkpoint)
-- **Últimos archivos modificados:** `app/build.gradle.kts`, `app/proguard-rules.pro`, `ic_stat_opennetsim.xml`, `TunnelNotifications.kt`, `ThrottleDashboardScreen.kt`, `.github/workflows/ci.yml` y documentación (Fase 12, rama `feat/release-prep`).
-- **Estado General:** Fases 1–11 en `develop` y `main`; Fase 12 verificada (local, CI y dispositivo), pendiente de fusionar (PR #10).
+- **Últimos archivos modificados:** `TcpWindowPolicy.kt`, `ReceiveWindowClamp.kt`, `AndroidReceiveWindowClamp.kt`, `TcpForwarder.kt`, `ForwarderEnvironment.kt`, `ThrottleVpnService.kt`, sus tests y `openspec/changes/clamp-outer-receive-window` (rama `fix/stale-flow-backlog`).
+- **Estado General:** Fases 1–11 en `develop` y `main`; Fase 12 en `develop` (PR #10). Cambio `clamp-outer-receive-window` verificado en local y en dispositivo, pendiente de CI, de fusionar y de archivar.
 - **Artefacto de Distribución:** APK de depuración en `app/build/outputs/apk/debug/app-debug.apk`; release firmada en `app/build/outputs/apk/release/app-release.apk` (keystore del usuario, fuera del repositorio).
-- **Siguiente acción inmediata:** fusionar el PR #10; después, el paso 5 de la hoja de ruta (empezando por el caso del test de velocidad cancelado).
+- **Siguiente acción inmediata:** CI y fusión del PR de `fix/stale-flow-backlog`, repetir el caso del test de Google con la release y archivar el cambio; después, el resto del paso 5.

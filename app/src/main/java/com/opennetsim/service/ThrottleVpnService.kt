@@ -22,6 +22,7 @@ import com.opennetsim.service.diag.NetDiagnostics
 import com.opennetsim.service.diag.error
 import com.opennetsim.service.diag.warn
 import com.opennetsim.service.forwarder.AndroidIcmpEchoTransport
+import com.opennetsim.service.forwarder.AndroidReceiveWindowClamp
 import com.opennetsim.service.forwarder.ForwarderEnvironment
 import com.opennetsim.service.forwarder.IcmpEchoTransport
 import com.opennetsim.service.forwarder.VpnSocketProtector
@@ -193,7 +194,8 @@ class ThrottleVpnService : VpnService(), VpnSocketProtector {
                 coroutineScope = serviceScope,
                 bufferPool = ByteBufferPool.defaultInstance,
                 diagnostics = diagnostics,
-                clock = clock
+                clock = clock,
+                receiveWindowClamp = AndroidReceiveWindowClamp
             ),
             listener = listener,
             mtu = TUN_MTU,
