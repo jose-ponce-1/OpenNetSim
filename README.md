@@ -1,32 +1,140 @@
-# OpenNetSim 🌐📱
+<p align="center">
+  <img src="docs/images/logo-animated.svg" width="128" height="128" alt="OpenNetSim logo">
+</p>
 
-> **Project Status:** 🚧 **Work in Progress (WIP)**  
-> This project is currently under active development and testing.
+<h1 align="center">OpenNetSim</h1>
 
-**OpenNetSim** is an Android application designed to simulate and emulate adverse or degraded network conditions (such as slow 3G, Edge, flaky Wi-Fi, high latency, or packet loss) in a granular manner without requiring root privileges (`root`).
+<p align="center">
+  <b>Simulate slow, flaky and lossy networks on your own Android phone.</b><br>
+  No root, no external servers: everything runs on the device through Android's <code>VpnService</code>.
+</p>
+
+<p align="center">
+  <a href="https://github.com/jose-ponce-1/OpenNetSim/releases/latest"><img src="https://img.shields.io/github/v/release/jose-ponce-1/OpenNetSim?label=release&color=3F5F90" alt="Latest release"></a>
+  <a href="https://github.com/jose-ponce-1/OpenNetSim/actions/workflows/ci.yml"><img src="https://github.com/jose-ponce-1/OpenNetSim/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
+  <img src="https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white" alt="Android 8.0+">
+  <img src="https://img.shields.io/badge/Kotlin-2.4-7F52FF?logo=kotlin&logoColor=white" alt="Kotlin 2.4">
+  <a href="LICENSE.txt"><img src="https://img.shields.io/badge/license-Apache%202.0-blue" alt="Apache 2.0"></a>
+  <a href="https://ko-fi.com/joseponce"><img src="https://img.shields.io/badge/Ko--fi-support-FF5E5B?logo=ko-fi&logoColor=white" alt="Support on Ko-fi"></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/jose-ponce-1/OpenNetSim/releases/latest"><b>⬇️ Download the latest APK</b></a>
+</p>
+
+<p align="center">
+  <img src="docs/images/screenshots/simulate.png" width="24%" alt="Simulate screen with the tunnel active">
+  <img src="docs/images/screenshots/parameters.png" width="24%" alt="Parameters screen with exact values">
+  <img src="docs/images/screenshots/telemetry.png" width="24%" alt="Telemetry screen with the live throughput chart">
+  <img src="docs/images/screenshots/telemetry-dark.png" width="24%" alt="Telemetry screen in dark mode">
+</p>
 
 ---
 
-## 🎯 Goals and Objectives
+## 🎯 What is it for?
 
-The main goal of OpenNetSim is to provide developers, QA engineers, and network enthusiasts with a lightweight, reliable on-device tool to evaluate mobile application resilience and behavior under realistic, hostile connectivity scenarios.
+OpenNetSim gives developers, QA engineers and network enthusiasts a lightweight on-device tool to see how
+mobile apps behave on hostile connections: slow 3G, EDGE, flaky Wi-Fi, satellite-like latency or packet
+loss. Turn it on, pick a profile and every other app on the phone goes through the simulated network.
 
-### Key Features:
-- **Non-Root (`VpnService`):** Intercepts network traffic transparently using Android's official `VpnService` API and a userspace TUN interface.
-- **Asymmetric Bidirectional Throttling:** Independent bandwidth rate limiting for uplink and downlink traffic using the **Token Bucket** algorithm.
-- **Latency, Jitter & Reordering:** Simulates round-trip time (RTT) delays and their variation without reordering packets, plus an optional reordering percentage (like `netem reorder`).
-- **Packet Loss Simulation:** Separate upload and download loss rates, either independent or in bursts (Gilbert model).
-- **Userspace L3/L4 Network Stack:** Pure Kotlin network forwarders for TCP (with flow control), UDP (DNS and streaming), and ICMP echo (`ping` is forwarded to the real network with unprivileged ping sockets, so its RTT is the real one plus the configured degradation and unreachable hosts do not answer), featuring **IPv4 & IPv6 Dual-Stack** compatibility.
-- **Material 3 UI (light & dark):** Built with **Jetpack Compose** in the official OpenNetSim palette, with an animated splash screen, a first-run welcome that requests the VPN permission, and three sections:
-  - **Simulate:** one-tap tunnel switch with active time, condition presets (3G, Flaky Wi-Fi, Satellite, etc.) and your own **saved profiles** (save, delete, undo).
-  - **Parameters:** exact values typed in text fields (bandwidth in kbps or Mbps), with validation that never sends an invalid value to the tunnel and a one-tap reset to the base profile.
-  - **Telemetry:** live 60-second throughput chart against the configured limit, transferred/dropped/retransmitted counters and tunnel status.
+> [!NOTE]
+> The app's interface is currently in Spanish.
 
----
+## ✨ Features
 
-## 🏗️ Project Architecture
+- **Non-root (`VpnService`):** intercepts traffic transparently with Android's official `VpnService` API and a
+  userspace TUN interface.
+- **Asymmetric bandwidth:** independent upload and download limits (20 kbps – 50 Mbps) with the
+  **Token Bucket** algorithm.
+- **Latency, jitter and reordering:** extra round-trip delay and smooth jitter that never reorders packets,
+  plus an optional reordering percentage (like `netem reorder`).
+- **Packet loss:** separate upload and download rates, independent or in bursts (Gilbert model).
+- **Real `ping`:** ICMP echo is forwarded to the real network with unprivileged ping sockets, so its RTT is
+  the real one plus the configured degradation, and unreachable hosts do not answer.
+- **Userspace L3/L4 stack in pure Kotlin:** TCP (with flow control and retransmissions), UDP (DNS,
+  streaming) and ICMP forwarders, **IPv4 and IPv6 dual-stack** (IPv6 only when the physical network has it).
+- **Material 3 UI**, light and dark, with three sections:
+  - **Simulate:** one-tap tunnel switch with active time, built-in profiles and your own **saved profiles**
+    (save, delete, undo).
+  - **Parameters:** exact values typed in text fields (bandwidth in kbps or Mbps). Invalid values never reach
+    the tunnel, and you can reset to the base profile in one tap.
+  - **Telemetry:** live 60-second throughput chart against the configured limit, transferred, dropped and
+    retransmitted counters, and tunnel status.
 
-OpenNetSim follows **Clean Architecture** principles to ensure decoupling, high performance, and unit testability:
+## 📸 Screenshots
+
+| Welcome | Simulate | Parameters | Telemetry | About |
+|:---:|:---:|:---:|:---:|:---:|
+| <img src="docs/images/screenshots/welcome.png" width="160" alt="Welcome"> | <img src="docs/images/screenshots/simulate.png" width="160" alt="Simulate"> | <img src="docs/images/screenshots/parameters.png" width="160" alt="Parameters"> | <img src="docs/images/screenshots/telemetry.png" width="160" alt="Telemetry"> | <img src="docs/images/screenshots/about.png" width="160" alt="About"> |
+
+| Simulate (dark) | Telemetry (dark) |
+|:---:|:---:|
+| <img src="docs/images/screenshots/simulate-dark.png" width="160" alt="Simulate in dark mode"> | <img src="docs/images/screenshots/telemetry-dark.png" width="160" alt="Telemetry in dark mode"> |
+
+The telemetry chart above was captured with the **3G Lento** profile while downloading a large file: the
+download stays right at the 384 kbps limit.
+
+## 📥 Installation
+
+1. Download `OpenNetSim-<version>.apk` from the [latest release](https://github.com/jose-ponce-1/OpenNetSim/releases/latest).
+2. Open it on your phone and allow installing apps from that source when Android asks.
+3. On first launch, grant the VPN permission. The tunnel only starts when you turn the simulation on.
+
+**Requirements:** Android 8.0 (API 26) or later.
+
+<details>
+<summary>Verify the APK signature</summary>
+
+Release APKs are signed with APK Signature Scheme v2 and an RSA 4096 certificate. Check it with
+`apksigner` from the Android SDK build tools:
+
+```bash
+apksigner verify --print-certs OpenNetSim-1.0.0.apk
+```
+
+The certificate SHA-256 digest must be
+`5234b875b3fb5c6d887887b1447a7509df8979b9a5d1fc8772a2fe4ea26069aa`. Each release also lists the SHA-256 of
+its APK.
+</details>
+
+## 🎛️ Built-in profiles
+
+| Profile | Download | Upload | Extra latency | Jitter | Loss (each way) |
+|---|---:|---:|---:|---:|---:|
+| 3G Lento (slow 3G) | 384 kbps | 128 kbps | +200 ms | ±40 ms | 2 % |
+| 2G / EDGE | 128 kbps | 48 kbps | +400 ms | ±80 ms | 5 % |
+| Wi-Fi Inestable (flaky Wi-Fi) | 5 Mbps | 2 Mbps | +120 ms | ±60 ms | 8 % |
+| Alta Latencia (satellite / remote servers) | 10 Mbps | 2 Mbps | +600 ms | ±20 ms | 0 % |
+| Personalizado (custom) | your values | | | | |
+
+Every value can be changed in **Parameters**, and any combination can be saved as your own profile.
+Latency is added to the round trip and split between both directions.
+
+## ⚙️ How it works
+
+```mermaid
+flowchart LR
+    Apps["📱 Apps on the device"] -- "IP packets" --> TUN["TUN interface<br/>(VpnService)"]
+    TUN --> Up["Uplink engine<br/>token bucket · delay · loss"]
+    Up --> FWD["Userspace forwarders<br/>TCP · UDP · ICMP"]
+    FWD -- "protected sockets" --> Net(("🌐 Internet"))
+    Net --> FWD
+    FWD --> Down["Downlink engine<br/>token bucket · delay · loss"]
+    Down --> TUN
+```
+
+1. `VpnService` routes the device's traffic into a TUN interface owned by the app.
+2. `TunnelPipeline` reads each IP packet and runs it through the **uplink** engine (bandwidth, latency,
+   jitter, reordering and loss).
+3. The forwarders terminate TCP in userspace, relay UDP and ICMP, and open real sockets that are
+   *protected* from the VPN so they reach the physical network.
+4. Responses go back through the **downlink** engine and are written to the TUN interface as IP packets.
+
+The engine (`:core`) is pure Kotlin/JVM: it has no Android dependencies and is unit-tested on the JVM.
+
+## 🏗️ Project architecture
+
+OpenNetSim follows **Clean Architecture** principles to keep the engine decoupled, fast and testable:
 
 ```text
 OpenNetSim/
@@ -39,28 +147,29 @@ OpenNetSim/
 │       │   ├── time/        # MonotonicClock shared by the engine, forwarders and service
 │       │   └── buffer/      # Contention-free ByteBufferPool
 │       └── model/           # Immutable configuration, presets and telemetry models
-└── app/                     # Gradle module :app: Android application
-    └── com/opennetsim/
-        ├── tunnel/          # TunnelController and ConfigStore: the only contract the UI sees
-        ├── profiles/        # User-saved connection profiles and their persistence
-        ├── service/         # VpnService lifecycle, notifications, intents and config persistence
-        │   ├── pipeline/    # TunnelPipeline: TUN loops + engine + forwarders (JVM-testable)
-        │   └── forwarder/   # Userspace TCP/UDP forwarders and real ICMP (ping) forwarder
-        └── ui/              # ViewModel and JVM-tested UI logic (fields, profiles, chart)
-            ├── screens/     # Compose screens: welcome, simulate, parameters, telemetry
-            ├── components/  # Shared Compose components
-            └── theme/       # Official palette (light/dark) and typography
+├── app/                     # Gradle module :app: Android application
+│   └── com/opennetsim/
+│       ├── tunnel/          # TunnelController and ConfigStore: the only contract the UI sees
+│       ├── profiles/        # User-saved connection profiles and their persistence
+│       ├── service/         # VpnService lifecycle, notifications, intents and config persistence
+│       │   ├── pipeline/    # TunnelPipeline: TUN loops + engine + forwarders (JVM-testable)
+│       │   └── forwarder/   # Userspace TCP/UDP forwarders and real ICMP (ping) forwarder
+│       └── ui/              # ViewModel and JVM-tested UI logic (fields, profiles, chart, links)
+│           ├── screens/     # Compose screens: welcome, simulate, parameters, telemetry, about
+│           ├── components/  # Shared Compose components
+│           └── theme/       # Official palette (light/dark) and typography
+├── benchmark/               # JMH microbenchmarks of the per-packet path
+└── openspec/                # Specifications and archived changes (OpenSpec workflow)
 ```
 
----
+## 🛠️ Requirements & build
 
-## 🛠️ Requirements & Build
+- **Android SDK:** min SDK 26 (Android 8.0), target and compile SDK 35 (Android 15)
+- **Language:** Kotlin 2.4 (built-in Kotlin of Android Gradle Plugin 9), Jetpack Compose with Material 3
+- **Build system:** Gradle (Kotlin DSL) with a version catalog (`gradle/libs.versions.toml`)
+- **JDK:** 17
 
-- **Android SDK:** Min SDK 26 (Android 8.0) / Target SDK 34 (Android 14)
-- **Language:** Kotlin 2.4 (built-in Kotlin of Android Gradle Plugin 9)
-- **Build System:** Gradle (Kotlin DSL) with a version catalog (`gradle/libs.versions.toml`)
-
-### Verification Commands
+### Verification commands
 
 ```bash
 # Compile Kotlin code (pure :core module and Android :app)
@@ -86,7 +195,11 @@ OpenNetSim/
 ./gradlew :app:assembleRelease
 ```
 
-### Release Signing
+On Windows, use `.\gradlew.bat` instead of `./gradlew`. The same checks run in GitHub Actions on every pull
+request.
+
+### Release signing
+
 The release keystore and its passwords never go in the repository. Add these Gradle properties to
 `~/.gradle/gradle.properties` (or pass them as `ORG_GRADLE_PROJECT_<name>` environment variables in CI):
 
@@ -107,6 +220,8 @@ installed app can only be updated with an APK signed by the same key.
 OpenNetSim is free, open source and ad-free. If you find it useful, you can support its development on
 [Ko-fi](https://ko-fi.com/joseponce).
 
+<a href="https://ko-fi.com/joseponce"><img src="https://img.shields.io/badge/Ko--fi-Support%20OpenNetSim-FF5E5B?logo=ko-fi&logoColor=white&style=for-the-badge" alt="Support OpenNetSim on Ko-fi"></a>
+
 ## 📄 License
 
 This project is licensed under the Apache License 2.0. See the [LICENSE.txt](LICENSE.txt) file for details.
@@ -115,3 +230,5 @@ OpenNetSim is provided **"as is", without warranty of any kind**, express or imp
 not liable for any damage arising from its use (sections 7 and 8 of the license). It changes how your
 device's traffic flows while the simulation is active: use it for testing, not as a security or privacy
 tool.
+
+<p align="center">Made with ❤️ by <a href="https://github.com/jose-ponce-1">Jose Ponce</a></p>
