@@ -30,6 +30,9 @@ import com.opennetsim.ui.components.TabularNumbers
  *
  * Sin icono de error: en pantallas de 360 dp taparía el número; el error ya lo marcan el borde, la
  * etiqueta y el mensaje (y `isError` para TalkBack).
+ *
+ * Vacío equivale a 0: mientras se edita se ve «0» como marcador (escribir lo sustituye, sin dejar un
+ * «0» delante) y al salir el ViewModel escribe «0» en el campo.
  */
 @Composable
 fun ParameterTextField(
@@ -70,6 +73,7 @@ fun ParameterTextField(
         enabled = state.enabled,
         textStyle = LocalTextStyle.current.merge(TabularNumbers),
         label = { Text(if (state.changed) "${field.label} •" else field.label) },
+        placeholder = { Text(ParameterInput.format(field, 0.0, unit)) },
         prefix = if (field.prefix.isNotEmpty()) {
             { Text(field.prefix) }
         } else {

@@ -48,8 +48,13 @@ class MainActivity : ComponentActivity() {
      * Salida de la pantalla de carga: espera a que termine la animación del icono (Android 12+, como
      * mucho su duración) y lo agranda y desvanece. Con las animaciones del sistema desactivadas, la
      * duración escalada es 0 y la salida es inmediata.
+     *
+     * En Android 12+, `core-splashscreen` aplica las barras del sistema del tema justo antes de esta
+     * llamada y otra vez en `remove()` (iconos claros de `Theme.Material.Light`, colores de barra), lo
+     * que deshace `enableEdgeToEdge()`: se vuelve a aplicar tras cada uno de esos dos puntos.
      */
     private fun animateSplashExit(provider: SplashScreenViewProvider) {
+        enableEdgeToEdge()
         val iconEnd = provider.iconAnimationStartMillis + provider.iconAnimationDurationMillis
         val wait = (iconEnd - SystemClock.uptimeMillis()).coerceIn(0L, MAX_ICON_WAIT_MS)
         provider.iconView.animate()
@@ -59,7 +64,10 @@ class MainActivity : ComponentActivity() {
             .scaleX(EXIT_SCALE)
             .scaleY(EXIT_SCALE)
             .alpha(0f)
-            .withEndAction { provider.remove() }
+            .withEndAction {
+                provider.remove()
+                enableEdgeToEdge()
+            }
             .start()
     }
 

@@ -43,7 +43,11 @@ archivo).
 ### Campos de texto
 - `ParameterField` (enum) describe cada parámetro: rango, decimales, prefijo, sufijo y cómo leerlo y
   escribirlo en `ThrottleConfig`. `ParameterInput.parse`/`format` son funciones puras (coma o punto
-  decimal, conversión kbps/Mbps, mensajes «Obligatorio», «Solo números», «Rango: …»).
+  decimal, conversión kbps/Mbps, mensajes «Solo números», «Rango: …»).
+- Vacío equivale a 0 (petición del usuario tras probarlo en su teléfono): `parse` lo interpreta como
+  «0», así que donde 0 está fuera de rango da el mismo error que escribirlo. Mientras se edita, el 0 es
+  el marcador (`placeholder`) del campo, no texto: si se escribiera «0» en el campo, el cursor quedaría
+  delante o detrás y teclear 5 daría «50» o «05». Al salir del campo el ViewModel escribe «0».
 - Los textos viven en el ViewModel (`drafts`), no en el composable: un valor válido se aplica con el
   debounce de siempre (150 ms) y uno no válido solo cambia el texto. Al salir del campo se reformatea
   si es válido. Cualquier cambio de configuración que no venga de teclear (perfil, restablecer,
@@ -83,6 +87,25 @@ archivo).
 - Iconos de `material-icons-extended` (Outlined) en lugar de los SVG del prototipo; R8 elimina los no
   usados.
 
+### Código abierto y donaciones («Acerca de»)
+- Petición del usuario (18/11/2026) tras investigar cómo lo hacen otras apps (NewPipe, AntennaPod,
+  Thunderbird, Fossify, AnkiDroid): apartado «Código abierto» (Apache 2.0 y «Ver el código en GitHub»),
+  apartado «Apoya el proyecto» con «Apoyar en Ko-fi», sin avisos que interrumpan, y la firma. El diálogo
+  se desplaza porque en 360 × 640 dp no cabe.
+- La app se distribuirá como APK en GitHub y en Google Play. La política de pagos de Play (sección 4)
+  prohíbe botones o enlaces que lleven a otro medio de pago, y en 2026 Play bloqueó actualizaciones de
+  AnkiDroid por su enlace de donaciones. Por eso el apartado de Ko-fi solo aparece si la app no la
+  instaló Google Play: `SupportLinks.donationLinkAllowed(instalador)` (pura, probada en JVM) con
+  `getInstallSourceInfo` (API 30+) o `getInstallerPackageName` (API 26–29).
+- Alternativa descartada: dos variantes de compilación (`github`/`play`). Evita incluir la URL en el
+  binario de Play, pero cambia los nombres de todas las tareas (`lintGithubDebug`, `assemblePlayRelease`…),
+  la CI, Kover y la documentación. Se puede adoptar más adelante si Google lo exige.
+- El enlace al repositorio se mantiene también en Play: enlazar al código fuente es habitual y no es un
+  medio de pago. Riesgo residual: si el README o la página del repositorio enlazan a Ko-fi, un revisor
+  podría considerarlo un camino indirecto al pago.
+- `SupportLinks.KO_FI_URL` es la página de Ko-fi del autor (`https://ko-fi.com/joseponce`), la misma que
+  `.github/FUNDING.yml` (botón «Sponsor» del repositorio) y la sección «Support» del README.
+
 ### Tema y pantalla de carga
 - `lightColorScheme`/`darkColorScheme` con todos los roles del prototipo, incluidos los contenedores de
   superficie; los roles que el prototipo no define (`onSecondary`, `onTertiary`, `onError`,
@@ -92,6 +115,11 @@ archivo).
   un vector de 288 dp con el logo dentro del círculo de 192 dp; en `drawable-v31` es un
   `animated-vector` (trazo del marco y de la onda, nodos que aparecen; ~1 s). La salida espera a que
   termine la animación del icono (como mucho su duración) y lo escala y desvanece en 320 ms.
+- En Android 12+, `core-splashscreen` aplica las barras del sistema del tema al empezar la salida y otra
+  vez en `remove()` (`windowLightStatusBar`, colores de barra…), lo que deshacía `enableEdgeToEdge()`:
+  iconos blancos sobre fondo claro tras la pantalla de carga (visto en el emulador con API 37). La
+  salida vuelve a llamar a `enableEdgeToEdge()` tras esos dos puntos, de modo que la política de las
+  barras sigue en un único sitio en lugar de duplicarla en los temas.
 
 ## Risks / Trade-offs
 - [Campos con texto no válido al recrear la actividad] → los textos están en el ViewModel y sobreviven

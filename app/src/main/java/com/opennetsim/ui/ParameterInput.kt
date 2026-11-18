@@ -93,10 +93,13 @@ object ParameterInput {
     private const val BITS_PER_BYTE = 8.0
     private const val TEN = 10.0
 
+    /**
+     * Un campo vacío equivale a 0. Donde 0 queda fuera del rango (ancho de banda, ráfaga media) se trata
+     * como cualquier otro valor fuera de rango: error y se conserva el último valor válido.
+     */
     fun parse(field: ParameterField, text: String, unit: BandwidthUnit): ParameterParse {
-        val normalized = text.trim().replace(',', '.')
+        val normalized = text.trim().replace(',', '.').ifEmpty { "0" }
         return when {
-            normalized.isEmpty() -> ParameterParse.Invalid("Obligatorio")
             normalized == "." || !NUMBER.matches(normalized) -> ParameterParse.Invalid("Solo números")
             else -> {
                 val typed = normalized.toDouble()

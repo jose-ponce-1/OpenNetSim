@@ -291,12 +291,20 @@ class MainViewModel(
         }
     }
 
-    /** Al salir de un campo con un valor válido, su texto se reformatea (p. ej. «0200» → «200»). */
+    /**
+     * Al salir de un campo, un texto válido se reformatea (p. ej. «0200» → «200») y uno vacío pasa a «0»,
+     * también donde 0 está fuera de rango (el campo sigue indicando el error).
+     */
     fun onParameterFocusLost(field: ParameterField) {
         _uiState.update { current ->
             val text = current.drafts[field] ?: return@update current
-            if (ParameterInput.parse(field, text, current.bandwidthUnit) !is ParameterParse.Valid) return@update current
-            val formatted = ParameterInput.format(field, field.read(current.config), current.bandwidthUnit)
+            val unit = current.bandwidthUnit
+            val formatted = when {
+                text.isBlank() -> ParameterInput.format(field, 0.0, unit)
+                ParameterInput.parse(field, text, unit) is ParameterParse.Valid ->
+                    ParameterInput.format(field, field.read(current.config), unit)
+                else -> return@update current
+            }
             current.copy(drafts = current.drafts + (field to formatted))
         }
     }

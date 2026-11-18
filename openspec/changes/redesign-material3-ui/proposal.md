@@ -21,10 +21,14 @@ implementarlo.
   un perfil más y eliminarlos, con «Deshacer». Se conservan entre ejecuciones.
 - **Parámetros:** **BREAKING (UI)** los sliders se sustituyen por campos de texto con valor exacto,
   validación con mensaje y unidad kbps/Mbps para el ancho de banda. Un valor no válido nunca llega al
-  túnel. Se indica el perfil base y cuántos valores cambian, con «Restablecer» y «Deshacer».
+  túnel; un campo vacío equivale a 0. Se indica el perfil base y cuántos valores cambian, con
+  «Restablecer» y «Deshacer».
 - **Telemetría:** gráfica del caudal de los últimos 60 s (bajada, subida o ambos) con la línea del
   límite, contadores (transferido, descartados, retransmitido, tiempo activo), estado del túnel y botón
   para detenerlo o iniciarlo.
+- **Información de la app** (botón de la barra superior): versión, descripción, código abierto con
+  enlace a GitHub, apoyo económico con enlace a Ko-fi (salvo en la versión de Google Play) y la firma
+  «Hecho con ♥ por Jose Ponce».
 - El servicio publica el instante de arranque del túnel para que el tiempo activo sea correcto aunque se
   recree la actividad.
 
@@ -43,8 +47,8 @@ implementarlo.
 ## Capabilities
 
 ### New Capabilities
-- `app-navigation`: bienvenida del primer arranque con el permiso VPN y navegación entre Simular,
-  Parámetros y Telemetría.
+- `app-navigation`: bienvenida del primer arranque con el permiso VPN, navegación entre Simular,
+  Parámetros y Telemetría, e información de la app.
 - `connection-profiles`: perfiles predefinidos y guardados por el usuario, su selección, el perfil base
   y el resumen de las condiciones aplicadas.
 - `parameter-editing`: edición de cada parámetro con valor exacto, unidades, validación y

@@ -1,23 +1,19 @@
 package com.opennetsim.ui.screens
 
-import android.content.Context
-import android.content.pm.PackageManager
-import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
@@ -31,7 +27,6 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -43,7 +38,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.opennetsim.ui.MainUiState
 import com.opennetsim.ui.UserMessage
@@ -167,39 +161,4 @@ private fun TunnelFab(state: MainUiState, onToggle: () -> Unit) {
         containerColor = if (running) colors.tertiaryContainer else colors.primaryContainer,
         contentColor = if (running) colors.onTertiaryContainer else colors.onPrimaryContainer
     )
-}
-
-@Composable
-private fun AboutDialog(onDismiss: () -> Unit) {
-    val context = LocalContext.current
-    val version = remember(context) { versionName(context) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        icon = { BrandLogo(size = 48.dp, contentDescription = null) },
-        title = { Text("OpenNetSim") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (version != null) Text("Versión $version", style = MaterialTheme.typography.labelLarge)
-                Text(
-                    "Simula redes lentas, inestables o con pérdidas en este mismo dispositivo. Captura el tráfico " +
-                        "con el VpnService de Android y lo reenvía desde el propio teléfono, sin servidores externos " +
-                        "ni root."
-                )
-                Text("Licencia Apache 2.0.", style = MaterialTheme.typography.bodySmall)
-            }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Cerrar") } }
-    )
-}
-
-private fun versionName(context: Context): String? = try {
-    val info = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        context.packageManager.getPackageInfo(context.packageName, PackageManager.PackageInfoFlags.of(0))
-    } else {
-        @Suppress("DEPRECATION")
-        context.packageManager.getPackageInfo(context.packageName, 0)
-    }
-    info.versionName
-} catch (_: PackageManager.NameNotFoundException) {
-    null
 }

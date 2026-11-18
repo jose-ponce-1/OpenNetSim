@@ -55,3 +55,24 @@ Telemetría, que conserve la sección elegida al recrearse la actividad.
 - **GIVEN** el usuario está en Parámetros
 - **WHEN** gira el dispositivo
 - **THEN** sigue en Parámetros
+
+### Requirement: Información de la aplicación
+El botón de información de la barra superior SHALL abrir un diálogo con la versión instalada, una
+descripción breve de la app, un apartado de código abierto (licencia Apache 2.0 y enlace al código en
+GitHub), un apartado para apoyar el proyecto con un enlace a Ko-fi y la firma «Hecho con ♥ por
+Jose Ponce». Si la app se instaló desde Google Play, el diálogo SHALL omitir el apartado de apoyo
+económico: la política de pagos de Google Play no permite enlazar desde la app a otro medio de pago.
+
+#### Scenario: Abrir la información
+- **GIVEN** la app se instaló con el APK publicado en GitHub
+- **WHEN** el usuario pulsa el botón de información de la barra superior
+- **THEN** se muestra el diálogo con la versión, el apartado de código abierto con «Ver el código en GitHub», el apartado «Apoya el proyecto» con «Apoyar en Ko-fi» y «Hecho con ♥ por Jose Ponce»
+
+#### Scenario: Instalada desde Google Play
+- **GIVEN** la app se instaló desde Google Play
+- **WHEN** el usuario abre la información de la app
+- **THEN** se muestra el apartado de código abierto y no el de apoyo económico
+
+#### Scenario: Ver el código
+- **WHEN** el usuario pulsa «Ver el código en GitHub»
+- **THEN** se abre el repositorio del proyecto en el navegador

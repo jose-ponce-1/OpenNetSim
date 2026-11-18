@@ -33,9 +33,18 @@ class ParameterInputTest {
     }
 
     @Test
-    fun rejectsEmptyAndNonNumericText() {
-        assertEquals("Obligatorio", error(ParameterField.UP_KBPS, ""))
-        assertEquals("Obligatorio", error(ParameterField.UP_KBPS, "   "))
+    fun emptyTextMeansZero() {
+        assertEquals(0.0, valid(ParameterField.LATENCY_MS, ""), 0.0)
+        assertEquals(0.0, valid(ParameterField.JITTER_MS, "   "), 0.0)
+        assertEquals(0.0, valid(ParameterField.DOWN_LOSS_PERCENT, ""), 0.0)
+        // Donde 0 no está en el rango, el vacío da el mismo error que escribir 0.
+        assertEquals("Rango: 20 kbps – 20 Mbps", error(ParameterField.UP_KBPS, ""))
+        assertEquals(error(ParameterField.UP_KBPS, "0"), error(ParameterField.UP_KBPS, "  "))
+        assertEquals("Rango: 1 – 10 paquetes", error(ParameterField.LOSS_BURST, ""))
+    }
+
+    @Test
+    fun rejectsNonNumericText() {
         assertEquals("Solo números", error(ParameterField.UP_KBPS, "12a"))
         assertEquals("Solo números", error(ParameterField.UP_KBPS, "-5"))
         assertEquals("Solo números", error(ParameterField.UP_KBPS, "."))
@@ -115,10 +124,12 @@ class ParameterInputTest {
     @Test
     fun fieldStatesShowErrorsHintsAndChanges() {
         val config = slow3g.copy(latencyMs = 250)
-        val drafts = ParameterInput.drafts(config, BandwidthUnit.KBPS) + (ParameterField.JITTER_MS to "")
+        val drafts = ParameterInput.drafts(config, BandwidthUnit.KBPS) +
+            (ParameterField.JITTER_MS to "500") + (ParameterField.UP_LOSS_PERCENT to "")
         val states = ParameterInput.fieldStates(drafts, config, slow3g, BandwidthUnit.KBPS).associateBy { it.field }
 
-        assertEquals("Obligatorio", states.getValue(ParameterField.JITTER_MS).error)
+        assertEquals("Rango: 0 – 200 ms", states.getValue(ParameterField.JITTER_MS).error)
+        assertNull("Vacío equivale a 0, que es válido", states.getValue(ParameterField.UP_LOSS_PERCENT).error)
         assertTrue(states.getValue(ParameterField.LATENCY_MS).changed)
         assertFalse(states.getValue(ParameterField.DOWN_KBPS).changed)
         assertEquals("= 0.384 Mbps · 48 KB/s", states.getValue(ParameterField.DOWN_KBPS).supportingText)

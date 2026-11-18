@@ -35,17 +35,26 @@ de los campos sin cambiar el valor, y la unidad elegida SHALL conservarse entre 
 - **THEN** la bajada pasa a 12000 kbps
 
 ### Requirement: Valores no válidos
-Un campo vacío, con caracteres no numéricos o fuera de rango SHALL mostrar el error y el rango admitido,
-y la configuración SHALL conservar el último valor válido de ese parámetro. Un valor no válido nunca
-SHALL enviarse al túnel.
+Un campo con caracteres no numéricos o fuera de rango SHALL mostrar el error y el rango admitido, y la
+configuración SHALL conservar el último valor válido de ese parámetro. Un valor no válido nunca SHALL
+enviarse al túnel.
 
 #### Scenario: Fuera de rango
 - **WHEN** el texto de la latencia pasa a ser 5000
 - **THEN** el campo indica «Rango: 0 – 1000 ms», la latencia aplicada sigue siendo el último valor válido escrito y se avisa de que se mantiene el último valor correcto
 
-#### Scenario: Campo vacío
-- **WHEN** el usuario borra el contenido de la subida
-- **THEN** el campo indica que es obligatorio y la subida aplicada no cambia
+### Requirement: Campo vacío
+Un campo vacío SHALL equivaler a 0: mientras se edita SHALL mostrar 0 como marcador y, al salir del
+campo, SHALL mostrar 0. Donde 0 queda fuera del rango (ancho de banda, ráfaga media) SHALL tratarse como
+cualquier valor fuera de rango.
+
+#### Scenario: Vaciar la latencia
+- **WHEN** el usuario borra el contenido de la latencia
+- **THEN** la latencia aplicada pasa a 0 ms y el campo muestra 0
+
+#### Scenario: Vaciar la subida
+- **WHEN** el usuario borra el contenido de la subida y pasa a otro campo
+- **THEN** el campo muestra 0 e indica «Rango: 20 kbps – 20 Mbps», y la subida aplicada no cambia
 
 #### Scenario: Valor reformateado al salir
 - **WHEN** el usuario escribe «0200» en la latencia y pasa a otro campo

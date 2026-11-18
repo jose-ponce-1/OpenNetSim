@@ -102,6 +102,11 @@ installed app can only be updated with an APK signed by the same key.
 
 ---
 
+## ☕ Support
+
+OpenNetSim is free, open source and ad-free. If you find it useful, you can support its development on
+[Ko-fi](https://ko-fi.com/joseponce).
+
 ## 📄 License
 
 This project is licensed under the Apache License 2.0. See the [LICENSE.txt](LICENSE.txt) file for details.

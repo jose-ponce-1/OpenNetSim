@@ -450,6 +450,42 @@ class MainViewModelTest {
     }
 
     @Test
+    fun clearingAFieldAppliesZeroAndShowsItWhenLeaving() = runVmTest {
+        val tunnel = FakeTunnelController()
+        val vm = viewModel(tunnel)
+        tunnel.state.value = running(slow3g)
+
+        vm.onParameterTextChange(ParameterField.LATENCY_MS, "")
+        settle()
+
+        assertEquals(0, vm.uiState.value.config.latencyMs)
+        assertEquals(0, tunnel.updates.last().latencyMs)
+        assertEquals("Mientras se edita, el campo sigue vacío", "", vm.uiState.value.drafts[ParameterField.LATENCY_MS])
+
+        vm.onParameterFocusLost(ParameterField.LATENCY_MS)
+        assertEquals("0", vm.uiState.value.drafts[ParameterField.LATENCY_MS])
+    }
+
+    @Test
+    fun clearingAFieldWhereZeroIsOutOfRangeKeepsTheLastValidValue() = runVmTest {
+        val tunnel = FakeTunnelController()
+        val vm = viewModel(tunnel)
+        tunnel.state.value = running(slow3g)
+
+        vm.onParameterTextChange(ParameterField.UP_KBPS, "")
+        settle()
+        vm.onParameterFocusLost(ParameterField.UP_KBPS)
+
+        assertEquals(128, vm.uiState.value.config.upKbps)
+        assertTrue("Un valor no válido nunca llega al túnel", tunnel.updates.isEmpty())
+        assertEquals(
+            "Al salir, el campo muestra 0 con su error de rango",
+            "0",
+            vm.uiState.value.drafts[ParameterField.UP_KBPS]
+        )
+    }
+
+    @Test
     fun validTextIsReformattedWhenLeavingTheField() = runVmTest {
         val vm = viewModel(FakeTunnelController())
         vm.onParameterTextChange(ParameterField.LATENCY_MS, "0200")
