@@ -32,12 +32,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.opennetsim.R
 import com.opennetsim.ui.MainUiState
 import com.opennetsim.ui.TrafficDirection
 import com.opennetsim.ui.UiFormatters
 import com.opennetsim.ui.components.IconBadge
 import com.opennetsim.ui.components.StatTile
+import com.opennetsim.ui.components.asString
 
 /** Sección Telemetría: gráfica de caudal, contadores y estado del túnel. */
 @Composable
@@ -67,7 +70,7 @@ private fun DirectionSelector(direction: TrafficDirection, onSelect: (TrafficDir
                 onClick = { onSelect(option) },
                 shape = SegmentedButtonDefaults.itemShape(index = index, count = TrafficDirection.entries.size)
             ) {
-                Text(option.label)
+                Text(stringResource(option.labelRes))
             }
         }
     }
@@ -78,12 +81,13 @@ private fun Counters(state: MainUiState) {
     val telemetry = state.telemetry
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         CounterRow(
-            "Transferido" to telemetry.formattedTotalData(),
-            "Descartados" to "${telemetry.totalDroppedPackets} pkts"
+            stringResource(R.string.counter_transferred) to telemetry.formattedTotalData(),
+            stringResource(R.string.counter_dropped) to
+                stringResource(R.string.value_dropped_packets, telemetry.totalDroppedPackets)
         )
         CounterRow(
-            "Retransmitido" to telemetry.formattedRetransmittedData(),
-            "Tiempo activo" to UiFormatters.elapsed(state.activeSeconds)
+            stringResource(R.string.counter_retransmitted) to telemetry.formattedRetransmittedData(),
+            stringResource(R.string.counter_active_time) to UiFormatters.elapsed(state.activeSeconds)
         )
     }
 }
@@ -105,13 +109,13 @@ private fun CounterRow(first: Pair<String, String>, second: Pair<String, String>
 private fun TunnelStatus(state: MainUiState) {
     val colors = MaterialTheme.colorScheme
     val (title, subtitle) = when {
-        state.isActive -> "Túnel VPN activo" to if (state.ipv6Routed) {
-            "IPv4 + IPv6 · MTU 1500"
+        state.isActive -> stringResource(R.string.tunnel_active) to if (state.ipv6Routed) {
+            stringResource(R.string.value_network_families, stringResource(R.string.families_dual_stack))
         } else {
-            "Solo IPv4: la red no tiene IPv6 · MTU 1500"
+            stringResource(R.string.tunnel_active_ipv4_only)
         }
-        state.isStarting -> "Iniciando el túnel VPN…" to "Estableciendo la interfaz virtual"
-        else -> "Túnel VPN detenido" to "El tráfico del dispositivo no se altera"
+        state.isStarting -> stringResource(R.string.tunnel_starting) to stringResource(R.string.tunnel_starting_detail)
+        else -> stringResource(R.string.tunnel_stopped) to stringResource(R.string.tunnel_stopped_detail)
     }
     Surface(
         shape = RoundedCornerShape(24.dp),
@@ -125,7 +129,7 @@ private fun TunnelStatus(state: MainUiState) {
                 Icons.Outlined.Speed,
                 colors.secondaryContainer,
                 colors.onSecondaryContainer,
-                "Perfil ${state.selectedName}",
+                stringResource(R.string.status_profile, state.selectedName.asString()),
                 UiFormatters.summary(state.config)
             )
         }

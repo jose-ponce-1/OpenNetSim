@@ -17,8 +17,8 @@ android {
         applicationId = "com.opennetsim"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.0.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -56,6 +56,20 @@ android {
 
     buildFeatures {
         compose = true
+    }
+
+    // Idiomas de la app: inglés (por defecto, values/) y español (values-es/). Las traducciones de las
+    // librerías a otros idiomas no se empaquetan; deben coincidir con res/xml/locales_config.xml.
+    androidResources {
+        localeFilters += listOf("en", "es")
+    }
+
+    // Google Play reparte los AAB por idioma: sin esto, un móvil en inglés no recibiría el español y no
+    // podría elegirlo como idioma de la app (Android 13+). Con dos idiomas el tamaño apenas cambia.
+    bundle {
+        language {
+            enableSplit = false
+        }
     }
 }
 

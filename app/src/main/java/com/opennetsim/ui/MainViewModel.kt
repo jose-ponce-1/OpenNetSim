@@ -2,6 +2,7 @@ package com.opennetsim.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.opennetsim.R
 import com.opennetsim.core.time.MonotonicClock
 import com.opennetsim.model.ThrottleConfig
 import com.opennetsim.model.ThrottlePreset
@@ -27,7 +28,6 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.launch
-import java.util.UUID
 
 /**
  * ViewModel de la app. Solo conoce [TunnelController]; nunca el servicio Android.
@@ -35,8 +35,11 @@ import java.util.UUID
  * El servicio es la fuente de verdad de la configuración activa: al observar el túnel en marcha, la
  * UI adopta su configuración, y al túnel solo se envían los cambios hechos por el usuario.
  *
+ * Los avisos son [UiText]: se resuelven al mostrarse, así que cambian de idioma con la app.
+ *
  * @param clock el mismo reloj monotónico que usa el servicio para fijar el arranque del túnel.
  * @param scopeOverride ámbito para recoger los flujos; los tests pasan uno con reloj virtual.
+ * @param naming cómo se identifican y nombran los perfiles que guarda el usuario.
  */
 @OptIn(FlowPreview::class)
 @Suppress("TooManyFunctions") // Un método por acción de la interfaz.
@@ -46,7 +49,7 @@ class MainViewModel(
     private val preferences: UiPreferences = InMemoryUiPreferences(),
     private val clock: MonotonicClock = MonotonicClock.SYSTEM,
     scopeOverride: CoroutineScope? = null,
-    private val newProfileId: () -> String = { UUID.randomUUID().toString().replace("-", "") }
+    private val naming: ProfileNaming = ProfileNaming()
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(initialState())
@@ -102,11 +105,11 @@ class MainViewModel(
             TunnelState.Starting -> _uiState.update { it.copy(isStarting = true) }
             TunnelState.Stopped -> {
                 onInactive()
-                if (previous is TunnelState.Running) showMessage("Simulación detenida. Tráfico sin alterar.")
+                if (previous is TunnelState.Running) showMessage(UiText.res(R.string.message_stopped))
             }
             is TunnelState.Failed -> {
                 onInactive()
-                showMessage("No se pudo activar el túnel: ${state.reason}")
+                showMessage(UiText.res(R.string.message_tunnel_failed, state.reason))
             }
         }
     }
@@ -135,7 +138,7 @@ class MainViewModel(
                 activeSeconds = elapsedSeconds(state)
             )
         }
-        if (announce) showMessage("Túnel VPN establecido · «${_uiState.value.selectedName}»")
+        if (announce) showMessage(UiText.res(R.string.message_tunnel_established, _uiState.value.selectedName))
         startTicker()
     }
 
@@ -183,7 +186,7 @@ class MainViewModel(
         if (isGranted) {
             tunnel.start(_uiState.value.config)
         } else {
-            showMessage("Se requiere permiso de VPN para interceptar y simular el tráfico.")
+            showMessage(UiText.res(R.string.message_vpn_permission_required))
         }
     }
 
@@ -212,19 +215,21 @@ class MainViewModel(
             )
         }
         userConfig.value = config
-        if (current.isActive) showMessage("Perfil «${profile.name}» aplicado sin reiniciar el túnel")
+        if (current.isActive) showMessage(UiText.res(R.string.message_profile_applied, profile.name))
     }
 
     /** Guarda los valores actuales como un perfil nuevo. Devuelve false si el nombre no es válido. */
     fun saveCurrentAsProfile(name: String): Boolean {
         val current = _uiState.value
-        if (ProfileCatalog.checkName(name, current.savedProfiles) != ProfileNameCheck.VALID) return false
-        val profile = SavedProfile(newProfileId(), name.trim(), current.config.copy(preset = ThrottlePreset.CUSTOM))
+        if (ProfileCatalog.checkName(name, current.savedProfiles, naming.reservedNames) != ProfileNameCheck.VALID) {
+            return false
+        }
+        val profile = SavedProfile(naming.newId(), name.trim(), current.config.copy(preset = ThrottlePreset.CUSTOM))
         val ref = ProfileRef.Saved(profile.id)
         updateProfiles(listOf(profile) + current.savedProfiles) {
             it.copy(selectedProfile = ref, base = ProfileBase(ref, it.config))
         }
-        showMessage("Perfil «${profile.name}» guardado", UNDO) {
+        showMessage(UiText.res(R.string.message_profile_saved, UiText.Raw(profile.name)), UNDO) {
             updateProfiles(_uiState.value.savedProfiles.filterNot { it.id == profile.id }) {
                 it.copy(
                     selectedProfile = if (it.selectedProfile == ref) current.selectedProfile else it.selectedProfile,
@@ -255,7 +260,7 @@ class MainViewModel(
                 base = if (it.base.ref == ref) ProfileBase(selection, it.config) else it.base
             )
         }
-        showMessage("Perfil «${removed.name}» eliminado", UNDO) {
+        showMessage(UiText.res(R.string.message_profile_deleted, UiText.Raw(removed.name)), UNDO) {
             val restored = _uiState.value.savedProfiles.toMutableList()
                 .apply { add(index.coerceAtMost(size), removed) }
             updateProfiles(restored) {
@@ -330,7 +335,7 @@ class MainViewModel(
             )
         }
         userConfig.value = current.base.config
-        showMessage("Valores de «${current.baseName}» restablecidos", UNDO) { editConfig { previous } }
+        showMessage(UiText.res(R.string.message_values_restored, current.baseName), UNDO) { editConfig { previous } }
     }
 
     private fun applyEdit(transform: (ThrottleConfig) -> ThrottleConfig, typedDraft: Pair<ParameterField, String>?) {
@@ -351,7 +356,7 @@ class MainViewModel(
 
     // ------------------------------------------------------------------ Avisos y bienvenida
 
-    private fun showMessage(text: String, actionLabel: String? = null, undo: (() -> Unit)? = null) {
+    private fun showMessage(text: UiText, actionLabel: UiText? = null, undo: (() -> Unit)? = null) {
         val message = UserMessage(id = ++messageCounter, text = text, actionLabel = actionLabel)
         pendingUndo = undo?.let { message.id to it }
         _uiState.update { it.copy(userMessage = message) }
@@ -387,7 +392,8 @@ class MainViewModel(
             savedProfiles = saved,
             bandwidthUnit = unit,
             drafts = ParameterInput.drafts(config, unit),
-            showOnboarding = !preferences.onboardingCompleted
+            showOnboarding = !preferences.onboardingCompleted,
+            reservedProfileNames = naming.reservedNames
         )
     }
 
@@ -399,6 +405,6 @@ class MainViewModel(
         const val TICK_MS = 1_000L
 
         private const val MS_PER_SECOND = 1_000L
-        private const val UNDO = "Deshacer"
+        private val UNDO = UiText.res(R.string.action_undo)
     }
 }

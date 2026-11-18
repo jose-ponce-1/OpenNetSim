@@ -27,15 +27,20 @@ class UiFormattersTest {
     fun directionalLossShowsBothValuesAndRoundTrip() {
         val config = ThrottleConfig(upLossPercent = 1f, downLossPercent = 2f)
         assertEquals("↑ 1.0% · ↓ 2.0%", UiFormatters.loss(config))
-        assertEquals("Ida y vuelta 3.0%", UiFormatters.roundTripLoss(config))
-        assertEquals("Ida y vuelta 3.0% · ráfagas de 4", UiFormatters.roundTripLoss(config.copy(lossBurstLength = 4)))
+        assertEquals("Ida y vuelta 3.0%", UiFormatters.roundTripLoss(config).es())
+        assertEquals(
+            "Ida y vuelta 3.0% · ráfagas de 4",
+            UiFormatters.roundTripLoss(config.copy(lossBurstLength = 4)).es()
+        )
+        assertEquals("Round trip 3.0% · bursts of 4", UiFormatters.roundTripLoss(config.copy(lossBurstLength = 4)).en())
     }
 
     @Test
     fun jitterMentionsReorderingOnlyWhenActive() {
-        assertEquals("Jitter ±40 ms", UiFormatters.jitter(ThrottleConfig(jitterMs = 40)))
+        assertEquals("Jitter ±40 ms", UiFormatters.jitter(ThrottleConfig(jitterMs = 40)).es())
         val reordering = ThrottleConfig(jitterMs = 40, reorderPercent = 5f)
-        assertEquals("Jitter ±40 ms · reord. 5.0%", UiFormatters.jitter(reordering))
+        assertEquals("Jitter ±40 ms · reord. 5.0%", UiFormatters.jitter(reordering).es())
+        assertEquals("Jitter ±40 ms · reorder 5.0%", UiFormatters.jitter(reordering).en())
     }
 
     @Test

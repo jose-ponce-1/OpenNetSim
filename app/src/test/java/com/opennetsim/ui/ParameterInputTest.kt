@@ -18,11 +18,15 @@ class ParameterInputTest {
         return (result as ParameterParse.Valid).value
     }
 
-    private fun error(field: ParameterField, text: String, unit: BandwidthUnit = BandwidthUnit.KBPS): String {
+    private fun errorText(field: ParameterField, text: String, unit: BandwidthUnit): UiText {
         val result = ParameterInput.parse(field, text, unit)
         assertTrue("«$text» no debería ser válido: $result", result is ParameterParse.Invalid)
         return (result as ParameterParse.Invalid).message
     }
+
+    /** Error en español, el idioma de las specs. */
+    private fun error(field: ParameterField, text: String, unit: BandwidthUnit = BandwidthUnit.KBPS): String? =
+        errorText(field, text, unit).es()
 
     @Test
     fun acceptsCommaOrDotAndTrimsSpaces() {
@@ -57,6 +61,15 @@ class ParameterInputTest {
         assertEquals("Rango: 50 kbps – 50 Mbps", error(ParameterField.DOWN_KBPS, "10"))
         assertEquals("Rango: 0 – 25 %", error(ParameterField.REORDER_PERCENT, "30"))
         assertEquals("Rango: 1 – 10 paquetes", error(ParameterField.LOSS_BURST, "0"))
+    }
+
+    @Test
+    fun errorsInEnglish() {
+        assertEquals("Range: 0 – 1000 ms", errorText(ParameterField.LATENCY_MS, "5000", BandwidthUnit.KBPS).en())
+        assertEquals("Range: 1 – 10 packets", errorText(ParameterField.LOSS_BURST, "0", BandwidthUnit.KBPS).en())
+        assertEquals("Numbers only", errorText(ParameterField.UP_KBPS, "12a", BandwidthUnit.KBPS).en())
+        assertEquals("Average burst", ParameterField.LOSS_BURST.label.en())
+        assertEquals("Reordenación", ParameterField.REORDER_PERCENT.label.es())
     }
 
     @Test
@@ -99,10 +112,15 @@ class ParameterInputTest {
     fun applyNoteCountsInvalidFields() {
         assertEquals(
             "Los valores válidos se aplican al instante, también con la simulación en curso.",
-            ParameterInput.applyNote(0)
+            ParameterInput.applyNote(0).es()
         )
-        assertEquals("Hay 1 valor no válido: se mantiene el último correcto.", ParameterInput.applyNote(1))
-        assertEquals("Hay 3 valores no válidos: se mantienen los últimos correctos.", ParameterInput.applyNote(3))
+        assertEquals("Hay 1 valor no válido: se mantiene el último correcto.", ParameterInput.applyNote(1).es())
+        assertEquals(
+            "Hay 3 valores no válidos: se mantienen los últimos correctos.",
+            ParameterInput.applyNote(3).es()
+        )
+        assertEquals("There is 1 invalid value: the last valid one is kept.", ParameterInput.applyNote(1).en())
+        assertEquals("There are 3 invalid values: the last valid ones are kept.", ParameterInput.applyNote(3).en())
     }
 
     @Test
@@ -117,7 +135,7 @@ class ParameterInputTest {
         val reorder = states.single { it.field == ParameterField.REORDER_PERCENT }
         assertFalse(reorder.enabled)
         assertNull("Un campo desactivado no muestra error", reorder.error)
-        assertEquals("Requiere latencia mayor que 0", reorder.supportingText)
+        assertEquals("Requiere latencia mayor que 0", reorder.supportingText.es())
         assertTrue(ParameterField.REORDER_PERCENT.isEnabled(slow3g))
     }
 
@@ -128,13 +146,13 @@ class ParameterInputTest {
             (ParameterField.JITTER_MS to "500") + (ParameterField.UP_LOSS_PERCENT to "")
         val states = ParameterInput.fieldStates(drafts, config, slow3g, BandwidthUnit.KBPS).associateBy { it.field }
 
-        assertEquals("Rango: 0 – 200 ms", states.getValue(ParameterField.JITTER_MS).error)
+        assertEquals("Rango: 0 – 200 ms", states.getValue(ParameterField.JITTER_MS).error.es())
         assertNull("Vacío equivale a 0, que es válido", states.getValue(ParameterField.UP_LOSS_PERCENT).error)
         assertTrue(states.getValue(ParameterField.LATENCY_MS).changed)
         assertFalse(states.getValue(ParameterField.DOWN_KBPS).changed)
-        assertEquals("= 0.384 Mbps · 48 KB/s", states.getValue(ParameterField.DOWN_KBPS).supportingText)
-        assertEquals("1 = pérdidas independientes", states.getValue(ParameterField.LOSS_BURST).supportingText)
-        assertEquals("0 – 1000 ms", states.getValue(ParameterField.LATENCY_MS).supportingText)
+        assertEquals("= 0.384 Mbps · 48 KB/s", states.getValue(ParameterField.DOWN_KBPS).supportingText.es())
+        assertEquals("1 = pérdidas independientes", states.getValue(ParameterField.LOSS_BURST).supportingText.es())
+        assertEquals("0 – 1000 ms", states.getValue(ParameterField.LATENCY_MS).supportingText.es())
 
         val mbps = ParameterInput.fieldStates(
             ParameterInput.drafts(config, BandwidthUnit.MBPS),
@@ -142,9 +160,11 @@ class ParameterInputTest {
             slow3g,
             BandwidthUnit.MBPS
         ).associateBy { it.field }
-        assertEquals("= 384 kbps · 48 KB/s", mbps.getValue(ParameterField.DOWN_KBPS).supportingText)
-        assertEquals("Pérdidas en ráfagas de 3", mbps.getValue(ParameterField.LOSS_BURST).supportingText)
-        assertEquals("Mbps", ParameterInput.suffix(ParameterField.DOWN_KBPS, BandwidthUnit.MBPS))
-        assertEquals("ms", ParameterInput.suffix(ParameterField.LATENCY_MS, BandwidthUnit.MBPS))
+        assertEquals("= 384 kbps · 48 KB/s", mbps.getValue(ParameterField.DOWN_KBPS).supportingText.es())
+        assertEquals("Pérdidas en ráfagas de 3", mbps.getValue(ParameterField.LOSS_BURST).supportingText.es())
+        assertEquals("Losses in bursts of 3", mbps.getValue(ParameterField.LOSS_BURST).supportingText.en())
+        assertEquals("Mbps", ParameterInput.suffix(ParameterField.DOWN_KBPS, BandwidthUnit.MBPS).es())
+        assertEquals("ms", ParameterInput.suffix(ParameterField.LATENCY_MS, BandwidthUnit.MBPS).es())
+        assertEquals("packets", ParameterInput.suffix(ParameterField.LOSS_BURST, BandwidthUnit.KBPS).en())
     }
 }

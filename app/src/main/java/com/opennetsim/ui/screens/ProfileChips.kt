@@ -41,11 +41,15 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.opennetsim.R
 import com.opennetsim.ui.ConnectionProfile
 import com.opennetsim.ui.MainUiState
 import com.opennetsim.ui.ProfileRef
 import com.opennetsim.ui.components.SectionTitle
+import com.opennetsim.ui.components.asString
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 
@@ -82,9 +86,9 @@ fun ProfileChips(
                 .padding(start = 16.dp, end = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            SectionTitle("Perfiles de conexión", modifier = Modifier.weight(1f))
+            SectionTitle(stringResource(R.string.profiles_title), modifier = Modifier.weight(1f))
             TextButton(onClick = onShowAll) {
-                Text("Ver todos (${profiles.size})")
+                Text(stringResource(R.string.profiles_see_all, profiles.size))
                 Icon(
                     Icons.AutoMirrored.Outlined.KeyboardArrowRight,
                     contentDescription = null,
@@ -104,7 +108,7 @@ fun ProfileChips(
         }
         Column(modifier = Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
-                text = state.selectedDescription,
+                text = state.selectedDescription.asString(),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -118,7 +122,7 @@ private fun ProfileChip(profile: ConnectionProfile, selected: Boolean, onSelect:
     FilterChip(
         selected = selected,
         onClick = { onSelect(profile.ref) },
-        label = { Text(profile.name) },
+        label = { Text(profile.name.asString()) },
         leadingIcon = when {
             selected -> {
                 {
@@ -133,7 +137,7 @@ private fun ProfileChip(profile: ConnectionProfile, selected: Boolean, onSelect:
                 {
                     Icon(
                         Icons.Outlined.BookmarkBorder,
-                        contentDescription = "Perfil guardado",
+                        contentDescription = stringResource(R.string.profile_saved),
                         modifier = Modifier.size(FilterChipDefaults.IconSize)
                     )
                 }
@@ -174,7 +178,7 @@ private fun SwipeHint(hidden: Int) {
             modifier = Modifier.size(16.dp)
         )
         Text(
-            text = if (hidden == 1) "Desliza para ver 1 perfil más" else "Desliza para ver $hidden perfiles más",
+            text = pluralStringResource(R.plurals.profiles_swipe_hint, hidden, hidden),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )

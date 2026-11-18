@@ -1,0 +1,213 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  User-visible texts. English is the default language; Spanish lives in values-es/strings.xml.
+  Strings marked translatable="false" are the same in every language (brand, units, number formats).
+-->
+<resources>
+
+    <!-- Brand and formats shared by every language -->
+    <string name="brand_name" translatable="false">OpenNetSim</string>
+    <string name="value_latency" translatable="false">+%1$d ms</string>
+    <string name="value_dropped_packets" translatable="false">%1$d pkts</string>
+    <string name="value_throughput_pair" translatable="false">↓ %1$s  ·  ↑ %2$s</string>
+    <string name="value_bandwidth_hint" translatable="false">= %1$s · %2$s KB/s</string>
+    <string name="value_name_counter" translatable="false">%1$d/%2$d</string>
+    <string name="value_range" translatable="false">%1$s – %2$s</string>
+    <string name="value_range_with_unit" translatable="false">%1$s – %2$s %3$s</string>
+    <string name="value_network_families" translatable="false">%1$s · MTU 1500</string>
+    <string name="families_dual_stack" translatable="false">IPv4 + IPv6</string>
+    <string name="axis_minus_60" translatable="false">−60 s</string>
+    <string name="axis_minus_30" translatable="false">−30 s</string>
+    <string name="notification_text" translatable="false">%1$s • ↓%2$s ↑%3$s • +%4$dms</string>
+
+    <!-- Common actions -->
+    <string name="action_close">Close</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_save">Save</string>
+    <string name="action_undo">Undo</string>
+    <string name="action_stop">Stop</string>
+    <string name="action_start">Start</string>
+    <string name="action_reset">Reset</string>
+    <string name="action_change">Change</string>
+    <string name="action_adjust">Adjust</string>
+    <string name="action_save_profile">Save profile</string>
+    <string name="link_open_failed">No app can open the link</string>
+
+    <!-- Navigation and top bar -->
+    <string name="nav_simulate">Simulate</string>
+    <string name="nav_parameters">Parameters</string>
+    <string name="nav_telemetry">Telemetry</string>
+    <string name="about_content_description">About OpenNetSim</string>
+    <string name="logo_content_description">OpenNetSim logo</string>
+    <string name="status_active">Active</string>
+    <string name="status_starting">Starting</string>
+    <string name="status_idle">Idle</string>
+
+    <!-- About -->
+    <string name="about_version">Version %1$s</string>
+    <string name="about_description">Simulates slow, unstable or lossy networks on this very device. It captures traffic with Android’s VpnService and forwards it from the phone itself, with no external servers and no root.</string>
+    <string name="about_open_source_title">Open source</string>
+    <string name="about_open_source_text">OpenNetSim is open source under the Apache 2.0 license: you can use, study, modify and share it freely. It is provided as is, without warranty of any kind.</string>
+    <string name="about_view_source">View the code on GitHub</string>
+    <string name="about_support_title">Support the project</string>
+    <string name="about_support_text">OpenNetSim is free and ad-free. If you find it useful, you can support its development with a donation.</string>
+    <string name="about_support_button">Support on Ko-fi</string>
+    <string name="about_made_with">Made with</string>
+    <string name="about_made_by">by Jose Ponce</string>
+    <string name="about_love">love</string>
+
+    <!-- Welcome -->
+    <string name="welcome_title">Put your app to the test on tough networks</string>
+    <string name="welcome_subtitle">OpenNetSim simulates slow 3G, flaky Wi-Fi or satellite links on this very device, no root needed.</string>
+    <string name="welcome_feature_bandwidth">Limit upload and download separately</string>
+    <string name="welcome_feature_latency">Add latency, jitter and reordering</string>
+    <string name="welcome_feature_loss">Drop packets randomly or in bursts</string>
+    <string name="welcome_vpn_note">Android will ask for permission to create a local VPN connection. Traffic is not sent to any external server.</string>
+    <string name="welcome_vpn_denied">Without the VPN permission the network can’t be simulated. It will be requested again when you start the simulation.</string>
+    <string name="welcome_allow_vpn">Allow VPN connection</string>
+    <string name="welcome_not_now">Not now</string>
+    <string name="welcome_get_started">Get started</string>
+
+    <!-- Simulate -->
+    <string name="hero_running_overline">SIMULATION RUNNING</string>
+    <string name="hero_running_body">Applying the profile to all traffic. Tap to stop.</string>
+    <string name="hero_starting_overline">STARTING</string>
+    <string name="hero_starting_body">Setting up the VPN tunnel…</string>
+    <string name="hero_stopped_overline">SIMULATION STOPPED</string>
+    <string name="hero_stopped_title">Network unaltered</string>
+    <string name="hero_stopped_body">Tap to capture traffic and apply “%1$s”.</string>
+    <string name="families_ipv4_only">IPv4 only</string>
+    <string name="applied_conditions">Applied conditions</string>
+    <string name="label_download">Download</string>
+    <string name="label_upload">Upload</string>
+    <string name="label_latency">Latency</string>
+    <string name="label_loss">Loss</string>
+    <string name="telemetry_shortcut_title">Live telemetry</string>
+    <string name="telemetry_shortcut_idle">Start the simulation to see metrics</string>
+    <string name="simulate_footer">OpenNetSim captures traffic with Android’s VpnService and forwards it from the device itself. No external servers, no root.</string>
+
+    <!-- Profiles -->
+    <string name="profiles_title">Connection profiles</string>
+    <string name="profiles_see_all">See all (%1$d)</string>
+    <string name="profiles_mine">My profiles</string>
+    <string name="profiles_builtin">Built-in</string>
+    <string name="profiles_none_saved">You haven’t saved any profiles yet. Use “Save profile” to create one with your own name.</string>
+    <string name="profile_custom_keeps_values">Keeps the current values</string>
+    <string name="profile_saved">Saved profile</string>
+    <string name="profile_builtin">Built-in profile</string>
+    <string name="profile_manual">Manual setting</string>
+    <string name="profile_saved_description">Your own profile saved on this device.</string>
+    <string name="profile_delete_content_description">Delete profile %1$s</string>
+    <plurals name="profiles_swipe_hint">
+        <item quantity="one">Swipe to see %d more profile</item>
+        <item quantity="other">Swipe to see %d more profiles</item>
+    </plurals>
+    <plurals name="profile_based_on">
+        <item quantity="one">Based on %1$s · %2$d change</item>
+        <item quantity="other">Based on %1$s · %2$d changes</item>
+    </plurals>
+
+    <string name="save_profile_body">The current conditions will be saved: %1$s.</string>
+    <string name="save_profile_name_label">Profile name</string>
+    <string name="save_profile_name_placeholder">e.g. Subway at rush hour</string>
+    <string name="save_profile_hint">It will appear first in the list</string>
+    <string name="profile_name_error_empty">Enter a name</string>
+    <plurals name="profile_name_error_too_long">
+        <item quantity="one">Up to %d character</item>
+        <item quantity="other">Up to %d characters</item>
+    </plurals>
+    <string name="profile_name_error_duplicate">A profile with that name already exists</string>
+
+    <!-- Built-in profiles -->
+    <string name="preset_custom_name">Custom</string>
+    <string name="preset_custom_description">Set every network parameter by hand.</string>
+    <string name="preset_slow_3g_name">Slow 3G</string>
+    <string name="preset_slow_3g_description">Simulates weak, congested 3G mobile connectivity.</string>
+    <string name="preset_edge_name">2G / EDGE</string>
+    <string name="preset_edge_description">Very limited mobile connection with low speed and high ping.</string>
+    <string name="preset_unstable_wifi_name">Flaky Wi-Fi</string>
+    <string name="preset_unstable_wifi_description">Local network with interference, noticeable jitter and periodic loss.</string>
+    <string name="preset_high_latency_name">High Latency</string>
+    <string name="preset_high_latency_description">Simulates a satellite link or geographically distant servers.</string>
+
+    <!-- Parameters -->
+    <string name="group_bandwidth">Bandwidth</string>
+    <string name="group_latency">Latency and variability</string>
+    <string name="group_latency_note">Jitter varies the delay without changing the order. Reordering lets packets skip the latency so they overtake the ones waiting.</string>
+    <string name="group_loss">Packet loss</string>
+    <string name="group_loss_note">With bursts (Gilbert model) losses come in a row while keeping the average rate.</string>
+    <string name="round_trip_loss_label">Round-trip loss (ping)</string>
+    <string name="field_download">Download</string>
+    <string name="field_upload">Upload</string>
+    <string name="field_latency">Latency</string>
+    <string name="field_jitter">Jitter</string>
+    <string name="field_reorder">Reordering</string>
+    <string name="field_upload_loss">Upload loss</string>
+    <string name="field_download_loss">Download loss</string>
+    <string name="field_loss_burst">Average burst</string>
+    <string name="unit_packets">packets</string>
+    <string name="field_changed">%1$s •</string>
+    <string name="field_error_numbers_only">Numbers only</string>
+    <string name="field_error_range">Range: %1$s</string>
+    <string name="field_hint_requires_latency">Requires latency above 0</string>
+    <string name="field_hint_burst_independent">1 = independent losses</string>
+    <string name="field_hint_burst">Losses in bursts of %1$d</string>
+    <string name="apply_note_ok">Valid values apply instantly, even while the simulation is running.</string>
+    <plurals name="apply_note_invalid">
+        <item quantity="one">There is %d invalid value: the last valid one is kept.</item>
+        <item quantity="other">There are %d invalid values: the last valid ones are kept.</item>
+    </plurals>
+    <string name="high_loss_warning" formatted="false">High loss (>10%). Many TCP connections will suffer retransmissions or drops.</string>
+    <string name="summary_jitter">Jitter ±%1$d ms</string>
+    <string name="summary_jitter_reorder">Jitter ±%1$d ms · reorder %2$s</string>
+    <string name="summary_round_trip">Round trip %1$s</string>
+    <string name="summary_round_trip_bursts">Round trip %1$s · bursts of %2$d</string>
+
+    <!-- Telemetry -->
+    <string name="direction_download">Download</string>
+    <string name="direction_upload">Upload</string>
+    <string name="direction_both">Both</string>
+    <string name="headline_download">Current download</string>
+    <string name="headline_upload">Current upload</string>
+    <string name="headline_both">Total goodput</string>
+    <string name="headline_limit">Limit %1$s</string>
+    <string name="headline_limit_download">Limit ↓ %1$s</string>
+    <string name="chart_description">Throughput over the last 60 seconds. %1$s: %2$s. %3$s.</string>
+    <string name="axis_now">now</string>
+    <string name="legend_limit">Limit</string>
+    <string name="counter_transferred">Transferred</string>
+    <string name="counter_dropped">Dropped</string>
+    <string name="counter_retransmitted">Retransmitted</string>
+    <string name="counter_active_time">Active time</string>
+    <string name="tunnel_active">VPN tunnel active</string>
+    <string name="tunnel_active_ipv4_only">IPv4 only: the network has no IPv6 · MTU 1500</string>
+    <string name="tunnel_starting">Starting the VPN tunnel…</string>
+    <string name="tunnel_starting_detail">Setting up the virtual interface</string>
+    <string name="tunnel_stopped">VPN tunnel stopped</string>
+    <string name="tunnel_stopped_detail">Device traffic is not altered</string>
+    <string name="status_profile">Profile %1$s</string>
+
+    <!-- Messages -->
+    <string name="message_stopped">Simulation stopped. Traffic unaltered.</string>
+    <string name="message_tunnel_failed">Couldn’t start the tunnel: %1$s</string>
+    <string name="message_tunnel_established">VPN tunnel established · “%1$s”</string>
+    <string name="message_vpn_permission_required">VPN permission is required to intercept and simulate traffic.</string>
+    <string name="message_profile_applied">Profile “%1$s” applied without restarting the tunnel</string>
+    <string name="message_profile_saved">Profile “%1$s” saved</string>
+    <string name="message_profile_deleted">Profile “%1$s” deleted</string>
+    <string name="message_values_restored">“%1$s” values restored</string>
+
+    <!-- Tunnel service -->
+    <string name="notification_channel_name">OpenNetSim VPN service</string>
+    <string name="notification_channel_description">Persistent notification to control the network simulation</string>
+    <string name="notification_title">OpenNetSim active</string>
+    <string name="failure_revoked">VPN permission revoked: another VPN app took over or it was turned off in settings</string>
+    <string name="failure_establish_rejected">The system rejected the tunnel: the VPN permission is missing or another VPN blocks it</string>
+    <string name="failure_establish">Couldn’t establish the VPN tunnel</string>
+    <string name="failure_rebuild">Couldn’t rebuild the tunnel after a network change</string>
+    <string name="failure_parameters_rejected">Tunnel parameters rejected</string>
+    <string name="failure_invalid_state">Invalid state while establishing the tunnel</string>
+    <string name="failure_no_permission">No permission to establish the tunnel</string>
+    <string name="failure_traffic_stopped">The tunnel stopped forwarding traffic (details in Logcat, tag OpenNetSim)</string>
+
+</resources>

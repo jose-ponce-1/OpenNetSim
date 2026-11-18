@@ -50,17 +50,18 @@ class ThroughputHistoryTest {
     @Test
     fun headlineFollowsTheDirectionAndState() {
         val telemetry = NetworkTelemetry(bytesPerSecond = 50_000, downBytesPerSecond = 42_000, upBytesPerSecond = 8_000)
+        fun rendered(headline: ThroughputHeadline) = Triple(headline.label.es(), headline.value, headline.capLabel.es())
         assertEquals(
-            ThroughputHeadline("Bajada actual", "42.0 KB/s", "Límite 384 kbps"),
-            ThroughputHistory.headline(telemetry, config, TrafficDirection.DOWN, active = true)
+            Triple("Bajada actual", "42.0 KB/s", "Límite 384 kbps"),
+            rendered(ThroughputHistory.headline(telemetry, config, TrafficDirection.DOWN, active = true))
         )
         assertEquals(
-            ThroughputHeadline("Subida actual", "8.0 KB/s", "Límite 128 kbps"),
-            ThroughputHistory.headline(telemetry, config, TrafficDirection.UP, active = true)
+            Triple("Subida actual", "8.0 KB/s", "Límite 128 kbps"),
+            rendered(ThroughputHistory.headline(telemetry, config, TrafficDirection.UP, active = true))
         )
-        assertEquals(
-            ThroughputHeadline("Caudal útil total", "0 B/s", "Límite ↓ 384 kbps"),
-            ThroughputHistory.headline(telemetry, config, TrafficDirection.BOTH, active = false)
-        )
+        val both = ThroughputHistory.headline(telemetry, config, TrafficDirection.BOTH, active = false)
+        assertEquals(Triple("Caudal útil total", "0 B/s", "Límite ↓ 384 kbps"), rendered(both))
+        assertEquals("Total goodput", both.label.en())
+        assertEquals("Limit ↓ 384 kbps", both.capLabel.en())
     }
 }

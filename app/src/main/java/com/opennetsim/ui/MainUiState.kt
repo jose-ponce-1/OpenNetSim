@@ -1,5 +1,6 @@
 package com.opennetsim.ui
 
+import com.opennetsim.R
 import com.opennetsim.model.NetworkTelemetry
 import com.opennetsim.model.ThrottleConfig
 import com.opennetsim.model.ThrottlePreset
@@ -7,12 +8,12 @@ import com.opennetsim.profiles.SavedProfile
 
 /**
  * Aviso para el usuario. [id] distingue dos avisos con el mismo texto; [actionLabel] es la acción
- * opcional (p. ej. «Deshacer»).
+ * opcional (p. ej. «Deshacer»). Los textos se resuelven al mostrarse, en el idioma activo.
  */
-data class UserMessage(val id: Long, val text: String, val actionLabel: String? = null)
+data class UserMessage(val id: Long, val text: UiText, val actionLabel: UiText? = null)
 
 /** Título, subtítulo y si se ofrece «Restablecer» en la cabecera de Parámetros. */
-data class BaseProfileHeader(val title: String, val subtitle: String, val canReset: Boolean)
+data class BaseProfileHeader(val title: UiText, val subtitle: UiText, val canReset: Boolean)
 
 /**
  * Estado observable de la app.
@@ -20,6 +21,7 @@ data class BaseProfileHeader(val title: String, val subtitle: String, val canRes
  * [isActive] refleja el estado real del túnel publicado por el servicio, nunca una suposición.
  * [selectedProfile] corresponde a los valores de [config]; [base] es el perfil del que parten.
  * [drafts] son los textos de los campos de Parámetros, que pueden no ser válidos.
+ * [reservedProfileNames] son los nombres de los perfiles predefinidos en todos los idiomas.
  */
 data class MainUiState(
     val isActive: Boolean = false,
@@ -36,16 +38,18 @@ data class MainUiState(
     val requestVpnPermission: Boolean = false,
     val telemetry: NetworkTelemetry = NetworkTelemetry(),
     val history: List<ThroughputSample> = emptyList(),
-    val activeSeconds: Long = 0L
+    val activeSeconds: Long = 0L,
+    val reservedProfileNames: Set<String> = emptySet()
 ) {
     val profiles: List<ConnectionProfile> get() = ProfileCatalog.all(savedProfiles)
 
-    val selectedName: String get() = ProfileCatalog.nameOf(selectedProfile, savedProfiles)
+    val selectedName: UiText get() = ProfileCatalog.nameOf(selectedProfile, savedProfiles)
 
-    val selectedDescription: String
-        get() = ProfileCatalog.find(selectedProfile, savedProfiles)?.description ?: ThrottlePreset.CUSTOM.description
+    val selectedDescription: UiText
+        get() = ProfileCatalog.find(selectedProfile, savedProfiles)?.description
+            ?: PresetTexts.description(ThrottlePreset.CUSTOM)
 
-    val baseName: String get() = ProfileCatalog.nameOf(base.ref, savedProfiles)
+    val baseName: UiText get() = ProfileCatalog.nameOf(base.ref, savedProfiles)
 
     /** Campos cuyo valor difiere del perfil base. */
     val changedFields: List<ParameterField>
@@ -56,14 +60,16 @@ data class MainUiState(
         get() {
             val changes = changedFields.size
             return when {
-                base.ref == ProfileRef.CUSTOM -> BaseProfileHeader(baseName, "Ajuste manual", canReset = false)
+                base.ref == ProfileRef.CUSTOM ->
+                    BaseProfileHeader(baseName, UiText.res(R.string.profile_manual), canReset = false)
                 changes > 0 -> BaseProfileHeader(
-                    ThrottlePreset.CUSTOM.displayName,
-                    "Basado en $baseName · $changes ${if (changes == 1) "cambio" else "cambios"}",
+                    PresetTexts.name(ThrottlePreset.CUSTOM),
+                    UiText.Plural(R.plurals.profile_based_on, changes, listOf(baseName, changes)),
                     canReset = true
                 )
-                base.ref is ProfileRef.Saved -> BaseProfileHeader(baseName, "Perfil guardado", canReset = false)
-                else -> BaseProfileHeader(baseName, "Perfil predefinido", canReset = false)
+                base.ref is ProfileRef.Saved ->
+                    BaseProfileHeader(baseName, UiText.res(R.string.profile_saved), canReset = false)
+                else -> BaseProfileHeader(baseName, UiText.res(R.string.profile_builtin), canReset = false)
             }
         }
 
