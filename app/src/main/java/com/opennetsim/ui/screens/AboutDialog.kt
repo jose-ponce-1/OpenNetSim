@@ -31,9 +31,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
+import com.opennetsim.R
 import com.opennetsim.ui.SupportLinks
 import com.opennetsim.ui.components.BrandLogo
 
@@ -50,46 +52,45 @@ internal fun AboutDialog(onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = { BrandLogo(size = 48.dp, contentDescription = null) },
-        title = { Text("OpenNetSim") },
+        title = { Text(stringResource(R.string.brand_name)) },
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (version != null) Text("Versión $version", style = MaterialTheme.typography.labelLarge)
-                    Text(
-                        "Simula redes lentas, inestables o con pérdidas en este mismo dispositivo. Captura el " +
-                            "tráfico con el VpnService de Android y lo reenvía desde el propio teléfono, sin " +
-                            "servidores externos ni root."
-                    )
+                    if (version != null) {
+                        Text(
+                            stringResource(R.string.about_version, version),
+                            style = MaterialTheme.typography.labelLarge
+                        )
+                    }
+                    Text(stringResource(R.string.about_description))
                 }
                 AboutSection(
-                    title = "Código abierto",
-                    text = "OpenNetSim es de código abierto, con licencia Apache 2.0: puedes usarlo, estudiarlo, " +
-                        "modificarlo y compartirlo libremente. Se ofrece tal cual, sin garantías de ningún tipo."
+                    title = stringResource(R.string.about_open_source_title),
+                    text = stringResource(R.string.about_open_source_text)
                 ) {
                     OutlinedButton(onClick = { openLink(context, SupportLinks.SOURCE_CODE_URL) }) {
                         ButtonIcon(Icons.Outlined.Code)
-                        Text("Ver el código en GitHub")
+                        Text(stringResource(R.string.about_view_source))
                     }
                 }
                 if (showDonations) {
                     AboutSection(
-                        title = "Apoya el proyecto",
-                        text = "OpenNetSim es gratis y sin anuncios. Si te resulta útil, puedes apoyar su desarrollo " +
-                            "con un donativo."
+                        title = stringResource(R.string.about_support_title),
+                        text = stringResource(R.string.about_support_text)
                     ) {
                         FilledTonalButton(onClick = { openLink(context, SupportLinks.KO_FI_URL) }) {
                             ButtonIcon(Icons.Outlined.Coffee)
-                            Text("Apoyar en Ko-fi")
+                            Text(stringResource(R.string.about_support_button))
                         }
                     }
                 }
                 MadeWithLove()
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Cerrar") } }
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_close)) } }
     )
 }
 
@@ -120,14 +121,14 @@ private fun MadeWithLove() {
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text("Hecho con", style = style)
+        Text(stringResource(R.string.about_made_with), style = style)
         Icon(
             Icons.Filled.Favorite,
-            contentDescription = "amor",
+            contentDescription = stringResource(R.string.about_love),
             modifier = Modifier.size(14.dp),
             tint = MaterialTheme.colorScheme.error
         )
-        Text("por Jose Ponce", style = style)
+        Text(stringResource(R.string.about_made_by), style = style)
     }
 }
 
@@ -148,7 +149,7 @@ private fun openLink(context: Context, url: String) {
     try {
         context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
     } catch (_: ActivityNotFoundException) {
-        Toast.makeText(context, "No hay ninguna app para abrir el enlace", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, R.string.link_open_failed, Toast.LENGTH_SHORT).show()
     }
 }
 

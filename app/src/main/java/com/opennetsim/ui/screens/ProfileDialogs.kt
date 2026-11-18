@@ -43,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -50,12 +51,14 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.opennetsim.R
 import com.opennetsim.ui.ConnectionProfile
 import com.opennetsim.ui.MainUiState
 import com.opennetsim.ui.ProfileCatalog
 import com.opennetsim.ui.ProfileNameCheck
 import com.opennetsim.ui.ProfileRef
 import com.opennetsim.ui.UiFormatters
+import com.opennetsim.ui.components.asString
 import kotlinx.coroutines.launch
 
 /** Hoja con todos los perfiles: los guardados (con eliminar) y los predefinidos. */
@@ -78,13 +81,15 @@ fun ProfilesSheet(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Perfiles de conexión",
+                text = stringResource(R.string.profiles_title),
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier
                     .weight(1f)
                     .semantics { heading() }
             )
-            IconButton(onClick = close) { Icon(Icons.Outlined.Close, contentDescription = "Cerrar") }
+            IconButton(onClick = close) {
+                Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.action_close))
+            }
         }
         SheetProfileList(state, actions, close)
     }
@@ -98,7 +103,7 @@ private fun SheetProfileList(state: MainUiState, actions: ProfileActions, close:
             .verticalScroll(rememberScrollState())
             .padding(bottom = 24.dp)
     ) {
-        SheetHeader("Mis perfiles")
+        SheetHeader(stringResource(R.string.profiles_mine))
         val all = state.profiles
         val saved = all.filter { it.isSaved }
         if (saved.isEmpty()) NoSavedProfiles()
@@ -119,7 +124,7 @@ private fun SheetProfileList(state: MainUiState, actions: ProfileActions, close:
             }
         }
         HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
-        SheetHeader("Predefinidos")
+        SheetHeader(stringResource(R.string.profiles_builtin))
         Column(Modifier.selectableGroup()) {
             all.filterNot { it.isSaved }.forEach { profile ->
                 ProfileRow(
@@ -168,7 +173,7 @@ private fun NoSavedProfiles() {
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
-                text = "Aún no has guardado perfiles. Usa «Guardar perfil» para crear uno con tu nombre.",
+                text = stringResource(R.string.profiles_none_saved),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -183,6 +188,7 @@ private fun ProfileRow(
     onSelect: () -> Unit,
     onDelete: (() -> Unit)?
 ) {
+    val name = profile.name.asString()
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(end = 12.dp)) {
         Row(
             modifier = Modifier
@@ -196,7 +202,7 @@ private fun ProfileRow(
             RadioButton(selected = selected, onClick = null)
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = profile.name,
+                    text = name,
                     style = MaterialTheme.typography.bodyLarge,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -204,7 +210,7 @@ private fun ProfileRow(
                 Text(
                     // «Personalizado» no tiene valores propios: conserva los actuales.
                     text = if (profile.ref == ProfileRef.CUSTOM) {
-                        "Mantiene los valores actuales"
+                        stringResource(R.string.profile_custom_keeps_values)
                     } else {
                         UiFormatters.summary(profile.config)
                     },
@@ -215,7 +221,10 @@ private fun ProfileRow(
         }
         if (onDelete != null) {
             IconButton(onClick = onDelete) {
-                Icon(Icons.Outlined.Delete, contentDescription = "Eliminar perfil ${profile.name}")
+                Icon(
+                    Icons.Outlined.Delete,
+                    contentDescription = stringResource(R.string.profile_delete_content_description, name)
+                )
             }
         }
     }
@@ -230,7 +239,7 @@ fun SaveProfileDialog(
     modifier: Modifier = Modifier
 ) {
     var name by rememberSaveable { mutableStateOf("") }
-    val check = ProfileCatalog.checkName(name, state.savedProfiles)
+    val check = ProfileCatalog.checkName(name, state.savedProfiles, state.reservedProfileNames)
     val canSave = check == ProfileNameCheck.VALID
     val showError = check == ProfileNameCheck.DUPLICATE || check == ProfileNameCheck.TOO_LONG
     val focusRequester = remember { FocusRequester() }
@@ -240,24 +249,30 @@ fun SaveProfileDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = { Icon(Icons.Outlined.BookmarkAdd, contentDescription = null) },
-        title = { Text("Guardar perfil") },
+        title = { Text(stringResource(R.string.action_save_profile)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text("Se guardarán las condiciones actuales: ${UiFormatters.summary(state.config)}.")
+                Text(stringResource(R.string.save_profile_body, UiFormatters.summary(state.config)))
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it.take(ProfileCatalog.MAX_NAME_LENGTH) },
-                    label = { Text("Nombre del perfil") },
-                    placeholder = { Text("p. ej. Metro en hora punta") },
+                    label = { Text(stringResource(R.string.save_profile_name_label)) },
+                    placeholder = { Text(stringResource(R.string.save_profile_name_placeholder)) },
                     singleLine = true,
                     isError = showError,
                     supportingText = {
                         Row {
                             Text(
-                                text = if (showError) check.message.orEmpty() else "Aparecerá el primero en la lista",
+                                text = if (showError) {
+                                    check.message?.asString().orEmpty()
+                                } else {
+                                    stringResource(R.string.save_profile_hint)
+                                },
                                 modifier = Modifier.weight(1f)
                             )
-                            Text("${name.length}/${ProfileCatalog.MAX_NAME_LENGTH}")
+                            Text(
+                                stringResource(R.string.value_name_counter, name.length, ProfileCatalog.MAX_NAME_LENGTH)
+                            )
                         }
                     },
                     keyboardOptions = KeyboardOptions(
@@ -269,8 +284,10 @@ fun SaveProfileDialog(
                 )
             }
         },
-        confirmButton = { TextButton(onClick = save, enabled = canSave) { Text("Guardar") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
+        confirmButton = {
+            TextButton(onClick = save, enabled = canSave) { Text(stringResource(R.string.action_save)) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
         modifier = modifier
     )
 }

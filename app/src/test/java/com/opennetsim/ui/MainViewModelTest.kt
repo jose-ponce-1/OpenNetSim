@@ -76,7 +76,10 @@ class MainViewModelTest {
             preferences = preferences,
             clock = clock,
             scopeOverride = backgroundScope,
-            newProfileId = { "p${nextId++}" }
+            naming = ProfileNaming(
+                reservedNames = setOf("Slow 3G", "3G Lento", "Custom", "Personalizado"),
+                newId = { "p${nextId++}" }
+            )
         ).also { runCurrent() }
 
     private fun runVmTest(block: suspend TestScope.() -> Unit) = runTest(UnconfinedTestDispatcher(), testBody = block)
@@ -91,6 +94,10 @@ class MainViewModelTest {
     }
 
     private fun TestScope.settle() = advanceTimeBy(MainViewModel.CONFIG_DEBOUNCE_MS * 3)
+
+    private fun BaseProfileHeader.es() = Triple(title.es(), subtitle.es(), canReset)
+
+    private fun BaseProfileHeader.en() = Triple(title.en(), subtitle.en(), canReset)
 
     // ------------------------------------------------------------------ Estado del túnel
 
@@ -108,7 +115,8 @@ class MainViewModelTest {
         val state = vm.uiState.value
         assertFalse("El interruptor vuelve a apagado", state.isActive)
         assertFalse(state.isStarting)
-        assertTrue(state.userMessage!!.text.contains("otra VPN lo bloquea"))
+        assertEquals("No se pudo activar el túnel: otra VPN lo bloquea", state.userMessage?.text.es())
+        assertEquals("Couldn’t start the tunnel: otra VPN lo bloquea", state.userMessage?.text.en())
     }
 
     @Test
@@ -133,10 +141,11 @@ class MainViewModelTest {
         val tunnel = FakeTunnelController()
         val vm = viewModel(tunnel)
         tunnel.startRunning(slow3g)
-        assertEquals("Túnel VPN establecido · «3G Lento»", vm.uiState.value.userMessage?.text)
+        assertEquals("Túnel VPN establecido · «3G Lento»", vm.uiState.value.userMessage?.text.es())
+        assertEquals("VPN tunnel established · “Slow 3G”", vm.uiState.value.userMessage?.text.en())
 
         tunnel.state.value = TunnelState.Stopped
-        assertEquals("Simulación detenida. Tráfico sin alterar.", vm.uiState.value.userMessage?.text)
+        assertEquals("Simulación detenida. Tráfico sin alterar.", vm.uiState.value.userMessage?.text.es())
 
         val reopened = viewModel(FakeTunnelController(initialState = running(slow3g)))
         assertNull("Reabrir la app con el túnel activo no avisa de nada", reopened.uiState.value.userMessage)
@@ -228,7 +237,10 @@ class MainViewModelTest {
         vm.onVpnPermissionResult(isGranted = false)
 
         assertTrue(tunnel.started.isEmpty())
-        assertTrue(vm.uiState.value.userMessage!!.text.contains("permiso"))
+        assertEquals(
+            "Se requiere permiso de VPN para interceptar y simular el tráfico.",
+            vm.uiState.value.userMessage?.text.es()
+        )
     }
 
     @Test
@@ -300,7 +312,10 @@ class MainViewModelTest {
 
         assertEquals(ThrottlePreset.fromPreset(ThrottlePreset.HIGH_LATENCY), tunnel.updates.single())
         assertEquals(0, tunnel.stops)
-        assertEquals("Perfil «Alta Latencia» aplicado sin reiniciar el túnel", vm.uiState.value.userMessage?.text)
+        assertEquals(
+            "Perfil «Alta Latencia» aplicado sin reiniciar el túnel",
+            vm.uiState.value.userMessage?.text.es()
+        )
     }
 
     @Test
@@ -336,7 +351,8 @@ class MainViewModelTest {
         assertEquals("Metro en hora punta", saved.name)
         assertEquals(350, saved.config.latencyMs)
         assertEquals(ProfileRef.Saved(saved.id), state.selectedProfile)
-        assertEquals("Metro en hora punta", state.profiles.first().name)
+        assertEquals("Metro en hora punta", state.profiles.first().name.es())
+        assertEquals("El nombre propio no se traduce", "Metro en hora punta", state.profiles.first().name.en())
         assertEquals(listOf(saved), profileStore.load())
         assertTrue("Tras guardar no hay cambios respecto al perfil base", state.changedFields.isEmpty())
 
@@ -349,6 +365,7 @@ class MainViewModelTest {
     fun duplicateNameIsRejected() = runVmTest {
         val vm = viewModel(FakeTunnelController())
         assertFalse(vm.saveCurrentAsProfile("3g lento"))
+        assertFalse("Nombre del predefinido en inglés", vm.saveCurrentAsProfile("slow 3g"))
         assertTrue(vm.uiState.value.savedProfiles.isEmpty())
     }
 
@@ -357,7 +374,9 @@ class MainViewModelTest {
         val vm = viewModel(FakeTunnelController())
         vm.saveCurrentAsProfile("Metro")
         val message = vm.uiState.value.userMessage!!
-        assertEquals("Deshacer", message.actionLabel)
+        assertEquals("Deshacer", message.actionLabel.es())
+        assertEquals("Undo", message.actionLabel.en())
+        assertEquals("Perfil «Metro» guardado", message.text.es())
 
         vm.onMessageAction(message.id)
         assertTrue(vm.uiState.value.savedProfiles.isEmpty())
@@ -531,18 +550,19 @@ class MainViewModelTest {
         var state = vm.uiState.value
         assertEquals(listOf(ParameterField.LATENCY_MS, ParameterField.JITTER_MS), state.changedFields)
         assertEquals(
-            BaseProfileHeader("Personalizado", "Basado en 3G Lento · 2 cambios", canReset = true),
-            state.baseHeader
+            Triple("Personalizado", "Basado en 3G Lento · 2 cambios", true),
+            state.baseHeader.es()
         )
 
         vm.resetToBase()
         settle()
         state = vm.uiState.value
         assertEquals(slow3g, state.config)
-        assertEquals(BaseProfileHeader("3G Lento", "Perfil predefinido", canReset = false), state.baseHeader)
+        assertEquals(Triple("3G Lento", "Perfil predefinido", false), state.baseHeader.es())
         assertEquals("200", state.drafts[ParameterField.LATENCY_MS])
         assertEquals(ProfileRef.Preset(ThrottlePreset.SLOW_3G), state.selectedProfile)
-        assertEquals("Valores de «3G Lento» restablecidos", state.userMessage?.text)
+        assertEquals("Valores de «3G Lento» restablecidos", state.userMessage?.text.es())
+        assertEquals("“Slow 3G” values restored", state.userMessage?.text.en())
         assertEquals(slow3g, tunnel.updates.last())
 
         vm.onMessageAction(state.userMessage!!.id)
@@ -560,13 +580,15 @@ class MainViewModelTest {
         val vm = viewModel(FakeTunnelController())
         vm.selectProfile(ProfileRef.CUSTOM)
         vm.onParameterTextChange(ParameterField.LATENCY_MS, "250")
-        assertEquals(BaseProfileHeader("Personalizado", "Ajuste manual", canReset = false), vm.uiState.value.baseHeader)
+        assertEquals(Triple("Personalizado", "Ajuste manual", false), vm.uiState.value.baseHeader.es())
 
         vm.saveCurrentAsProfile("Metro")
-        assertEquals(BaseProfileHeader("Metro", "Perfil guardado", canReset = false), vm.uiState.value.baseHeader)
-        assertEquals("Perfil propio guardado en este dispositivo.", vm.uiState.value.selectedDescription)
+        assertEquals(Triple("Metro", "Perfil guardado", false), vm.uiState.value.baseHeader.es())
+        assertEquals(Triple("Metro", "Saved profile", false), vm.uiState.value.baseHeader.en())
+        assertEquals("Perfil propio guardado en este dispositivo.", vm.uiState.value.selectedDescription.es())
         vm.onParameterTextChange(ParameterField.JITTER_MS, "5")
-        assertEquals("Basado en Metro · 1 cambio", vm.uiState.value.baseHeader.subtitle)
+        assertEquals("Basado en Metro · 1 cambio", vm.uiState.value.baseHeader.subtitle.es())
+        assertEquals("Based on Metro · 1 change", vm.uiState.value.baseHeader.subtitle.en())
     }
 
     // ------------------------------------------------------------------ Bienvenida

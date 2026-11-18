@@ -1,5 +1,6 @@
 package com.opennetsim.ui
 
+import com.opennetsim.R
 import com.opennetsim.model.ThrottleConfig
 import com.opennetsim.model.ThrottlePreset
 import com.opennetsim.profiles.SavedProfile
@@ -13,12 +14,33 @@ class ProfileCatalogTest {
     private val metroConfig = ThrottleConfig(downKbps = 900, upKbps = 120, latencyMs = 350, jitterMs = 70)
     private val metro = SavedProfile("m", "Metro", metroConfig)
 
+    /** Lo que calcula MainActivity a partir de los recursos en inglés y en español. */
+    private val reserved = setOf(
+        "Custom", "Personalizado", "Slow 3G", "3G Lento", "2G / EDGE",
+        "Flaky Wi-Fi", "Wi-Fi Inestable", "High Latency", "Alta Latencia"
+    )
+
     @Test
     fun savedProfilesComeFirstThenPresets() {
         val names = ProfileCatalog.all(listOf(metro)).map { it.name }
         assertEquals(
-            listOf("Metro", "Personalizado", "3G Lento", "2G / EDGE", "Wi-Fi Inestable", "Alta Latencia"),
+            listOf(
+                UiText.Raw("Metro"),
+                UiText.res(R.string.preset_custom_name),
+                UiText.res(R.string.preset_slow_3g_name),
+                UiText.res(R.string.preset_edge_name),
+                UiText.res(R.string.preset_unstable_wifi_name),
+                UiText.res(R.string.preset_high_latency_name)
+            ),
             names
+        )
+        assertEquals(
+            UiText.res(R.string.profile_saved_description),
+            ProfileCatalog.all(listOf(metro)).first().description
+        )
+        assertEquals(
+            UiText.res(R.string.preset_slow_3g_description),
+            ProfileCatalog.find(ProfileRef.Preset(ThrottlePreset.SLOW_3G), emptyList())?.description
         )
         assertTrue(ProfileCatalog.all(listOf(metro)).first().isSaved)
     }
@@ -46,18 +68,33 @@ class ProfileCatalogTest {
     @Test
     fun findAndNameOfUnknownSavedProfile() {
         assertNull(ProfileCatalog.find(ProfileRef.Saved("x"), listOf(metro)))
-        assertEquals("Personalizado", ProfileCatalog.nameOf(ProfileRef.Saved("x"), listOf(metro)))
-        assertEquals("Metro", ProfileCatalog.nameOf(ProfileRef.Saved("m"), listOf(metro)))
+        assertEquals(
+            UiText.res(R.string.preset_custom_name),
+            ProfileCatalog.nameOf(ProfileRef.Saved("x"), listOf(metro))
+        )
+        assertEquals(UiText.Raw("Metro"), ProfileCatalog.nameOf(ProfileRef.Saved("m"), listOf(metro)))
     }
 
     @Test
     fun namesMustBeNonEmptyShortAndUnique() {
-        assertEquals(ProfileNameCheck.VALID, ProfileCatalog.checkName("  Metro en hora punta ", listOf(metro)))
-        assertEquals(ProfileNameCheck.EMPTY, ProfileCatalog.checkName("   ", emptyList()))
-        assertEquals(ProfileNameCheck.TOO_LONG, ProfileCatalog.checkName("x".repeat(25), emptyList()))
-        assertEquals(ProfileNameCheck.VALID, ProfileCatalog.checkName("x".repeat(24), emptyList()))
-        assertEquals(ProfileNameCheck.DUPLICATE, ProfileCatalog.checkName("3g lento", emptyList()))
-        assertEquals(ProfileNameCheck.DUPLICATE, ProfileCatalog.checkName("METRO", listOf(metro)))
-        assertEquals("Ya existe un perfil con ese nombre", ProfileNameCheck.DUPLICATE.message)
+        assertEquals(
+            ProfileNameCheck.VALID,
+            ProfileCatalog.checkName("  Metro en hora punta ", listOf(metro), reserved)
+        )
+        assertEquals(ProfileNameCheck.EMPTY, ProfileCatalog.checkName("   ", emptyList(), reserved))
+        assertEquals(ProfileNameCheck.TOO_LONG, ProfileCatalog.checkName("x".repeat(25), emptyList(), reserved))
+        assertEquals(ProfileNameCheck.VALID, ProfileCatalog.checkName("x".repeat(24), emptyList(), reserved))
+        assertEquals(ProfileNameCheck.DUPLICATE, ProfileCatalog.checkName("METRO", listOf(metro), reserved))
+        assertEquals(UiText.res(R.string.profile_name_error_duplicate), ProfileNameCheck.DUPLICATE.message)
+        assertEquals("Máximo 24 caracteres", ProfileNameCheck.TOO_LONG.message.es())
+        assertEquals("Up to 24 characters", ProfileNameCheck.TOO_LONG.message.en())
+    }
+
+    @Test
+    fun presetNamesAreReservedInEveryLanguage() {
+        assertEquals(ProfileNameCheck.DUPLICATE, ProfileCatalog.checkName("3g lento", emptyList(), reserved))
+        assertEquals(ProfileNameCheck.DUPLICATE, ProfileCatalog.checkName("slow 3g", emptyList(), reserved))
+        assertEquals(ProfileNameCheck.DUPLICATE, ProfileCatalog.checkName(" FLAKY WI-FI ", emptyList(), reserved))
+        assertEquals(ProfileNameCheck.VALID, ProfileCatalog.checkName("Slow 4G", emptyList(), reserved))
     }
 }

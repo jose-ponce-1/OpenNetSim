@@ -38,7 +38,8 @@ mobile apps behave on hostile connections: slow 3G, EDGE, flaky Wi-Fi, satellite
 loss. Turn it on, pick a profile and every other app on the phone goes through the simulated network.
 
 > [!NOTE]
-> The app's interface is currently in Spanish.
+> The app is available in **English and Spanish**. It follows the device language, and on Android 13+ you
+> can pick a language just for OpenNetSim in the system settings (*Settings › Apps › OpenNetSim › Language*).
 
 ## ✨ Features
 
@@ -53,6 +54,7 @@ loss. Turn it on, pick a profile and every other app on the phone goes through t
   the real one plus the configured degradation, and unreachable hosts do not answer.
 - **Userspace L3/L4 stack in pure Kotlin:** TCP (with flow control and retransmissions), UDP (DNS,
   streaming) and ICMP forwarders, **IPv4 and IPv6 dual-stack** (IPv6 only when the physical network has it).
+- **English and Spanish**, following the device language or the per-app language setting (Android 13+).
 - **Material 3 UI**, light and dark, with three sections:
   - **Simulate:** one-tap tunnel switch with active time, built-in profiles and your own **saved profiles**
     (save, delete, undo).
@@ -71,8 +73,8 @@ loss. Turn it on, pick a profile and every other app on the phone goes through t
 |:---:|:---:|
 | <img src="docs/images/screenshots/simulate-dark.png" width="160" alt="Simulate in dark mode"> | <img src="docs/images/screenshots/telemetry-dark.png" width="160" alt="Telemetry in dark mode"> |
 
-The telemetry chart above was captured with the **3G Lento** profile while downloading a large file: the
-download stays right at the 384 kbps limit.
+The telemetry chart above was captured with the **Slow 3G** profile (*3G Lento* in Spanish) while
+downloading a large file: the download stays right at the 384 kbps limit.
 
 ## 📥 Installation
 
@@ -101,11 +103,11 @@ its APK.
 
 | Profile | Download | Upload | Extra latency | Jitter | Loss (each way) |
 |---|---:|---:|---:|---:|---:|
-| 3G Lento (slow 3G) | 384 kbps | 128 kbps | +200 ms | ±40 ms | 2 % |
+| Slow 3G (*3G Lento*) | 384 kbps | 128 kbps | +200 ms | ±40 ms | 2 % |
 | 2G / EDGE | 128 kbps | 48 kbps | +400 ms | ±80 ms | 5 % |
-| Wi-Fi Inestable (flaky Wi-Fi) | 5 Mbps | 2 Mbps | +120 ms | ±60 ms | 8 % |
-| Alta Latencia (satellite / remote servers) | 10 Mbps | 2 Mbps | +600 ms | ±20 ms | 0 % |
-| Personalizado (custom) | your values | | | | |
+| Flaky Wi-Fi (*Wi-Fi Inestable*) | 5 Mbps | 2 Mbps | +120 ms | ±60 ms | 8 % |
+| High Latency (*Alta Latencia*: satellite / remote servers) | 10 Mbps | 2 Mbps | +600 ms | ±20 ms | 0 % |
+| Custom (*Personalizado*) | your values | | | | |
 
 Every value can be changed in **Parameters**, and any combination can be saved as your own profile.
 Latency is added to the round trip and split between both directions.

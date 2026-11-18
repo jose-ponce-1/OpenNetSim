@@ -1,5 +1,6 @@
 package com.opennetsim.ui
 
+import android.content.res.Configuration
 import android.os.Bundle
 import android.os.SystemClock
 import android.view.animation.PathInterpolator
@@ -11,11 +12,13 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.splashscreen.SplashScreenViewProvider
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.opennetsim.model.ThrottlePreset
 import com.opennetsim.profiles.SharedPreferencesProfileStore
 import com.opennetsim.service.ServiceTunnelController
 import com.opennetsim.ui.preferences.SharedPreferencesUiPreferences
 import com.opennetsim.ui.screens.OpenNetSimApp
 import com.opennetsim.ui.theme.OpenNetSimTheme
+import java.util.Locale
 
 class MainActivity : ComponentActivity() {
 
@@ -26,7 +29,8 @@ class MainActivity : ComponentActivity() {
                 MainViewModel(
                     tunnel = ServiceTunnelController(applicationContext),
                     profileStore = SharedPreferencesProfileStore(applicationContext),
-                    preferences = SharedPreferencesUiPreferences(applicationContext)
+                    preferences = SharedPreferencesUiPreferences(applicationContext),
+                    naming = ProfileNaming(reservedNames = reservedProfileNames())
                 )
             }
         }
@@ -43,6 +47,13 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    /** Nombres de los perfiles predefinidos en todos los idiomas de la app (ver `ProfileCatalog.checkName`). */
+    private fun reservedProfileNames(): Set<String> = APP_LANGUAGES.flatMap { language ->
+        val configuration = Configuration(resources.configuration).apply { setLocale(Locale.forLanguageTag(language)) }
+        val localized = createConfigurationContext(configuration).resources
+        ThrottlePreset.entries.map { localized.getString(PresetTexts.nameRes(it)) }
+    }.toSet()
 
     /**
      * Salida de la pantalla de carga: espera a que termine la animación del icono (Android 12+, como
@@ -72,6 +83,9 @@ class MainActivity : ComponentActivity() {
     }
 
     private companion object {
+        /** Idiomas de la app: los de `res/xml/locales_config.xml` y `localeFilters` en `build.gradle.kts`. */
+        val APP_LANGUAGES = listOf("en", "es")
+
         const val MAX_ICON_WAIT_MS = 1_000L
         const val EXIT_DURATION_MS = 320L
         const val EXIT_SCALE = 1.12f

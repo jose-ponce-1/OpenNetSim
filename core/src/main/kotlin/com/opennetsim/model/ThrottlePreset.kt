@@ -3,12 +3,11 @@ package com.opennetsim.model
 /**
  * Perfiles preconfigurados para simular diferentes escenarios de degradación de red.
  *
- * [packetLossPercent] se aplica por igual a la subida y a la bajada, sin ráfagas ni reordenación.
+ * [packetLossPercent] se aplica por igual a la subida y a la bajada, sin ráfagas ni reordenación. Los
+ * nombres y descripciones que ve el usuario están traducidos en los recursos de `:app` (`PresetTexts`);
+ * el nombre del enum es el que se guarda en la configuración.
  */
-@Suppress("LongParameterList") // Cada preset da todos sus valores con nombre; agruparlos no aclara nada.
 enum class ThrottlePreset(
-    val displayName: String,
-    val description: String,
     val downKbps: Int,
     val upKbps: Int,
     val latencyMs: Int,
@@ -16,8 +15,6 @@ enum class ThrottlePreset(
     val packetLossPercent: Float
 ) {
     CUSTOM(
-        displayName = "Personalizado",
-        description = "Ajuste manual de todos los parámetros de red.",
         downKbps = 1000,
         upKbps = 500,
         latencyMs = 100,
@@ -25,8 +22,6 @@ enum class ThrottlePreset(
         packetLossPercent = 0f
     ),
     SLOW_3G(
-        displayName = "3G Lento",
-        description = "Simula conectividad móvil 3G débil y congestionada.",
         downKbps = 384,
         upKbps = 128,
         latencyMs = 200,
@@ -34,8 +29,6 @@ enum class ThrottlePreset(
         packetLossPercent = 2.0f
     ),
     EDGE_2G(
-        displayName = "2G / EDGE",
-        description = "Conexión móvil muy limitada de baja velocidad y alto ping.",
         downKbps = 128,
         upKbps = 48,
         latencyMs = 400,
@@ -43,8 +36,6 @@ enum class ThrottlePreset(
         packetLossPercent = 5.0f
     ),
     UNSTABLE_WIFI(
-        displayName = "Wi-Fi Inestable",
-        description = "Red local con interferencias, jitter considerable y pérdida periódica.",
         downKbps = 5000,
         upKbps = 2000,
         latencyMs = 120,
@@ -52,8 +43,6 @@ enum class ThrottlePreset(
         packetLossPercent = 8.0f
     ),
     HIGH_LATENCY(
-        displayName = "Alta Latencia",
-        description = "Simula enlace satelital o servidores geográficamente remotos.",
         downKbps = 10000,
         upKbps = 2000,
         latencyMs = 600,

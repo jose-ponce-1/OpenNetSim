@@ -1,5 +1,6 @@
 package com.opennetsim.ui
 
+import com.opennetsim.R
 import com.opennetsim.model.ThrottleConfig
 import com.opennetsim.model.ThrottlePreset
 import com.opennetsim.profiles.SavedProfile
@@ -15,11 +16,11 @@ sealed interface ProfileRef {
     }
 }
 
-/** Perfil tal y como lo muestra la interfaz. */
+/** Perfil tal y como lo muestra la interfaz: el nombre de un perfil guardado es [UiText.Raw]. */
 data class ConnectionProfile(
     val ref: ProfileRef,
-    val name: String,
-    val description: String,
+    val name: UiText,
+    val description: UiText,
     val config: ThrottleConfig
 ) {
     val isSaved: Boolean get() = ref is ProfileRef.Saved
@@ -29,17 +30,17 @@ data class ConnectionProfile(
 data class ProfileBase(val ref: ProfileRef, val config: ThrottleConfig)
 
 /** Validación del nombre de un perfil nuevo. */
-enum class ProfileNameCheck(val message: String?) {
+enum class ProfileNameCheck(val message: UiText?) {
     VALID(null),
-    EMPTY("Escribe un nombre"),
-    TOO_LONG("Máximo ${ProfileCatalog.MAX_NAME_LENGTH} caracteres"),
-    DUPLICATE("Ya existe un perfil con ese nombre")
+    EMPTY(UiText.res(R.string.profile_name_error_empty)),
+    TOO_LONG(UiText.plural(R.plurals.profile_name_error_too_long, ProfileCatalog.MAX_NAME_LENGTH)),
+    DUPLICATE(UiText.res(R.string.profile_name_error_duplicate))
 }
 
 /** Catálogo de perfiles: orden, búsqueda, reconocimiento por valores y nombres válidos. */
 object ProfileCatalog {
     const val MAX_NAME_LENGTH = 24
-    private const val SAVED_DESCRIPTION = "Perfil propio guardado en este dispositivo."
+    private val SAVED_DESCRIPTION = UiText.res(R.string.profile_saved_description)
 
     /** Perfiles guardados (del más reciente al más antiguo) seguidos de los predefinidos. */
     fun all(saved: List<SavedProfile>): List<ConnectionProfile> =
@@ -50,8 +51,8 @@ object ProfileCatalog {
         is ProfileRef.Saved -> saved.firstOrNull { it.id == ref.id }?.toConnectionProfile()
     }
 
-    fun nameOf(ref: ProfileRef, saved: List<SavedProfile>): String =
-        find(ref, saved)?.name ?: ThrottlePreset.CUSTOM.displayName
+    fun nameOf(ref: ProfileRef, saved: List<SavedProfile>): UiText =
+        find(ref, saved)?.name ?: PresetTexts.name(ThrottlePreset.CUSTOM)
 
     /**
      * Perfil que corresponde a [config]: un predefinido si coincide exactamente, si no un guardado con
@@ -70,9 +71,13 @@ object ProfileCatalog {
     fun sameValues(a: ThrottleConfig, b: ThrottleConfig): Boolean =
         a.copy(preset = ThrottlePreset.CUSTOM) == b.copy(preset = ThrottlePreset.CUSTOM)
 
-    fun checkName(name: String, saved: List<SavedProfile>): ProfileNameCheck {
+    /**
+     * Nombre de un perfil nuevo. [reservedNames] son los nombres de los perfiles predefinidos en todos los
+     * idiomas de la app: un perfil guardado no puede llamarse como uno predefinido en ninguno de ellos.
+     */
+    fun checkName(name: String, saved: List<SavedProfile>, reservedNames: Set<String>): ProfileNameCheck {
         val trimmed = name.trim()
-        val taken = saved.map { it.name } + ThrottlePreset.entries.map { it.displayName }
+        val taken = saved.map { it.name } + reservedNames
         return when {
             trimmed.isEmpty() -> ProfileNameCheck.EMPTY
             trimmed.length > MAX_NAME_LENGTH -> ProfileNameCheck.TOO_LONG
@@ -85,8 +90,13 @@ object ProfileCatalog {
         ThrottlePreset.entries.firstOrNull { config.matchesPreset(it) } ?: ThrottlePreset.CUSTOM
 
     private fun SavedProfile.toConnectionProfile() =
-        ConnectionProfile(ProfileRef.Saved(id), name, SAVED_DESCRIPTION, config)
+        ConnectionProfile(ProfileRef.Saved(id), UiText.Raw(name), SAVED_DESCRIPTION, config)
 
     private fun ThrottlePreset.toConnectionProfile() =
-        ConnectionProfile(ProfileRef.Preset(this), displayName, description, ThrottlePreset.fromPreset(this))
+        ConnectionProfile(
+            ProfileRef.Preset(this),
+            PresetTexts.name(this),
+            PresetTexts.description(this),
+            ThrottlePreset.fromPreset(this)
+        )
 }
