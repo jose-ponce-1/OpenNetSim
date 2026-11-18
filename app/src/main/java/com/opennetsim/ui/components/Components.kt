@@ -24,6 +24,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -41,7 +42,7 @@ val TabularNumbers = TextStyle(fontFeatureSettings = "tnum")
 fun BrandLogo(
     size: Dp,
     modifier: Modifier = Modifier,
-    contentDescription: String? = "Logotipo de OpenNetSim"
+    contentDescription: String? = stringResource(R.string.logo_content_description)
 ) {
     Image(
         painter = painterResource(R.drawable.ic_logo_opennetsim),
@@ -63,11 +64,13 @@ fun StatusPill(
         label = "statusContainer"
     )
     val dot = if (isActive || isStarting) colors.primary else colors.outline
-    val label = when {
-        isActive -> "Activo"
-        isStarting -> "Iniciando"
-        else -> "En reposo"
-    }
+    val label = stringResource(
+        when {
+            isActive -> R.string.status_active
+            isStarting -> R.string.status_starting
+            else -> R.string.status_idle
+        }
+    )
     Surface(
         shape = CircleShape,
         color = container,

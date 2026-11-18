@@ -25,9 +25,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.opennetsim.R
 import com.opennetsim.ui.BandwidthUnit
 import com.opennetsim.ui.ParameterField
 import com.opennetsim.ui.ParameterFieldState
@@ -55,7 +57,7 @@ fun BandwidthGroup(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 GroupHeader(
-                    "Ancho de banda",
+                    stringResource(R.string.group_bandwidth),
                     Icons.Outlined.SwapVert,
                     colors.primaryContainer,
                     colors.onPrimaryContainer,
@@ -81,7 +83,7 @@ fun LatencyGroup(
         modifier = modifier,
         header = {
             GroupHeader(
-                "Latencia y variabilidad",
+                stringResource(R.string.group_latency),
                 Icons.Outlined.Timer,
                 colors.tertiaryContainer,
                 colors.onTertiaryContainer
@@ -90,10 +92,7 @@ fun LatencyGroup(
     ) {
         FieldPair(fields, ParameterField.LATENCY_MS, ParameterField.JITTER_MS, unit, actions)
         ParameterTextField(fields.getValue(ParameterField.REORDER_PERCENT), unit, actions, Modifier.fillMaxWidth())
-        GroupNote(
-            "El jitter varía el retardo sin cambiar el orden. La reordenación deja salir paquetes sin " +
-                "latencia para que adelanten a los que esperan."
-        )
+        GroupNote(stringResource(R.string.group_latency_note))
     }
 }
 
@@ -110,7 +109,7 @@ fun LossGroup(
         modifier = modifier,
         header = {
             GroupHeader(
-                "Pérdida de paquetes",
+                stringResource(R.string.group_loss),
                 Icons.Outlined.DisabledByDefault,
                 colors.errorContainer,
                 colors.onErrorContainer
@@ -119,7 +118,7 @@ fun LossGroup(
     ) {
         FieldPair(fields, ParameterField.UP_LOSS_PERCENT, ParameterField.DOWN_LOSS_PERCENT, unit, actions)
         ParameterTextField(fields.getValue(ParameterField.LOSS_BURST), unit, actions, Modifier.fillMaxWidth())
-        GroupNote("Con ráfagas (modelo de Gilbert) las pérdidas llegan seguidas manteniendo la tasa media.")
+        GroupNote(stringResource(R.string.group_loss_note))
         RoundTripLossRow(roundTripLoss)
     }
 }
@@ -205,7 +204,7 @@ private fun RoundTripLossRow(value: String) {
         HorizontalDivider()
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = "Pérdida de ida y vuelta (ping)",
+                text = stringResource(R.string.round_trip_loss_label),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f)

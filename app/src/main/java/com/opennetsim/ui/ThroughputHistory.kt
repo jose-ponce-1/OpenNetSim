@@ -1,5 +1,7 @@
 package com.opennetsim.ui
 
+import androidx.annotation.StringRes
+import com.opennetsim.R
 import com.opennetsim.model.NetworkTelemetry
 import com.opennetsim.model.ThrottleConfig
 import kotlin.math.max
@@ -8,10 +10,10 @@ import kotlin.math.max
 data class ThroughputSample(val downBytesPerSecond: Long, val upBytesPerSecond: Long)
 
 /** Dirección del tráfico que muestra la gráfica. */
-enum class TrafficDirection(val label: String) {
-    DOWN("Bajada"),
-    UP("Subida"),
-    BOTH("Ambos")
+enum class TrafficDirection(@param:StringRes val labelRes: Int) {
+    DOWN(R.string.direction_download),
+    UP(R.string.direction_upload),
+    BOTH(R.string.direction_both)
 }
 
 /**
@@ -26,7 +28,7 @@ data class ThroughputChart(
 )
 
 /** Titular de la gráfica: qué se mide, su valor actual y el límite configurado. */
-data class ThroughputHeadline(val label: String, val value: String, val capLabel: String)
+data class ThroughputHeadline(val label: UiText, val value: String, val capLabel: UiText)
 
 /** Historial de los últimos [CAPACITY] segundos de caudal y su representación en la gráfica. */
 object ThroughputHistory {
@@ -79,9 +81,21 @@ object ThroughputHistory {
         val down = UiFormatters.bandwidth(config.downKbps)
         val up = UiFormatters.bandwidth(config.upKbps)
         return when (direction) {
-            TrafficDirection.DOWN -> ThroughputHeadline("Bajada actual", value, "Límite $down")
-            TrafficDirection.UP -> ThroughputHeadline("Subida actual", value, "Límite $up")
-            TrafficDirection.BOTH -> ThroughputHeadline("Caudal útil total", value, "Límite ↓ $down")
+            TrafficDirection.DOWN -> ThroughputHeadline(
+                UiText.res(R.string.headline_download),
+                value,
+                UiText.res(R.string.headline_limit, down)
+            )
+            TrafficDirection.UP -> ThroughputHeadline(
+                UiText.res(R.string.headline_upload),
+                value,
+                UiText.res(R.string.headline_limit, up)
+            )
+            TrafficDirection.BOTH -> ThroughputHeadline(
+                UiText.res(R.string.headline_both),
+                value,
+                UiText.res(R.string.headline_limit_download, down)
+            )
         }
     }
 }

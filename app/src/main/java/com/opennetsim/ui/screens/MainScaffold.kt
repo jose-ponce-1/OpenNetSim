@@ -38,11 +38,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.opennetsim.R
 import com.opennetsim.ui.MainUiState
 import com.opennetsim.ui.UserMessage
 import com.opennetsim.ui.components.BrandLogo
 import com.opennetsim.ui.components.StatusPill
+import com.opennetsim.ui.components.asString
 
 /**
  * App principal: barra superior y botón flotante según la sección, barra de navegación inferior y
@@ -93,11 +96,15 @@ fun MainScaffold(state: MainUiState, actions: MainActions, modifier: Modifier = 
 @Composable
 private fun MessageEffect(message: UserMessage?, host: SnackbarHostState, actions: MainActions) {
     val currentActions by rememberUpdatedState(actions)
+    // Se resuelven aquí, en el idioma activo: al cambiar de idioma la actividad se recrea y el aviso
+    // vuelve a mostrarse ya traducido.
+    val text = message?.text?.asString().orEmpty()
+    val actionLabel = message?.actionLabel?.asString()
     LaunchedEffect(message) {
         if (message == null) return@LaunchedEffect
         val result = host.showSnackbar(
-            message = message.text,
-            actionLabel = message.actionLabel,
+            message = text,
+            actionLabel = actionLabel,
             duration = if (message.actionLabel != null) SnackbarDuration.Long else SnackbarDuration.Short
         )
         if (result == SnackbarResult.ActionPerformed) currentActions.onMessageAction(message.id)
@@ -116,17 +123,17 @@ private fun AppTopBar(destination: AppDestination, state: MainUiState, onAbout: 
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     BrandLogo(size = 32.dp, contentDescription = null)
-                    Text("OpenNetSim")
+                    Text(stringResource(R.string.brand_name))
                 }
             } else {
-                Text(destination.label)
+                Text(stringResource(destination.labelRes))
             }
         },
         actions = {
             StatusPill(state.isActive, state.isStarting, modifier = Modifier.padding(end = 4.dp))
             if (destination == AppDestination.SIMULATE) {
                 IconButton(onClick = onAbout) {
-                    Icon(Icons.Outlined.Info, contentDescription = "Acerca de OpenNetSim")
+                    Icon(Icons.Outlined.Info, contentDescription = stringResource(R.string.about_content_description))
                 }
             } else {
                 Spacer(modifier = Modifier.width(12.dp))
@@ -143,7 +150,7 @@ private fun AppNavigationBar(destination: AppDestination, onSelect: (AppDestinat
                 selected = item == destination,
                 onClick = { onSelect(item) },
                 icon = { Icon(item.icon, contentDescription = null) },
-                label = { Text(item.label) }
+                label = { Text(stringResource(item.labelRes)) }
             )
         }
     }
@@ -157,7 +164,7 @@ private fun TunnelFab(state: MainUiState, onToggle: () -> Unit) {
     ExtendedFloatingActionButton(
         onClick = onToggle,
         icon = { Icon(if (running) Icons.Filled.Stop else Icons.Filled.PlayArrow, contentDescription = null) },
-        text = { Text(if (running) "Detener" else "Iniciar") },
+        text = { Text(stringResource(if (running) R.string.action_stop else R.string.action_start)) },
         containerColor = if (running) colors.tertiaryContainer else colors.primaryContainer,
         contentColor = if (running) colors.onTertiaryContainer else colors.onPrimaryContainer
     )

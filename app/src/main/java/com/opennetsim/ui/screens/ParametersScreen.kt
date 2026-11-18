@@ -25,13 +25,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.opennetsim.R
 import com.opennetsim.ui.MainUiState
 import com.opennetsim.ui.ParameterInput
 import com.opennetsim.ui.UiFormatters
+import com.opennetsim.ui.components.asString
 
 private const val HIGH_LOSS_PERCENT = 10f
 
@@ -87,8 +90,8 @@ private fun BaseProfileCard(
             ) {
                 Icon(Icons.Outlined.Speed, contentDescription = null)
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(header.title, style = MaterialTheme.typography.titleMedium)
-                    Text(header.subtitle, style = MaterialTheme.typography.bodySmall)
+                    Text(header.title.asString(), style = MaterialTheme.typography.titleMedium)
+                    Text(header.subtitle.asString(), style = MaterialTheme.typography.bodySmall)
                 }
                 if (header.canReset) {
                     TextButton(onClick = onReset) {
@@ -97,15 +100,18 @@ private fun BaseProfileCard(
                             contentDescription = null,
                             modifier = Modifier.size(ButtonDefaults.IconSize)
                         )
-                        Text("Restablecer", modifier = Modifier.padding(start = ButtonDefaults.IconSpacing))
+                        Text(
+                            stringResource(R.string.action_reset),
+                            modifier = Modifier.padding(start = ButtonDefaults.IconSpacing)
+                        )
                     }
                 } else {
-                    TextButton(onClick = onChangeProfile) { Text("Cambiar") }
+                    TextButton(onClick = onChangeProfile) { Text(stringResource(R.string.action_change)) }
                 }
             }
         }
         Text(
-            text = ParameterInput.applyNote(invalidCount),
+            text = ParameterInput.applyNote(invalidCount).asString(),
             style = MaterialTheme.typography.bodySmall,
             color = if (invalidCount > 0) {
                 MaterialTheme.colorScheme.error
@@ -131,7 +137,7 @@ private fun HighLossWarning() {
         Row(modifier = Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Icon(Icons.Outlined.WarningAmber, contentDescription = null)
             Text(
-                text = "Pérdida elevada (>10 %). Muchas conexiones TCP sufrirán retransmisiones o caídas.",
+                text = stringResource(R.string.high_loss_warning),
                 style = MaterialTheme.typography.bodyMedium
             )
         }

@@ -1,11 +1,15 @@
 package com.opennetsim.ui
 
+import com.opennetsim.R
 import com.opennetsim.model.ThrottleConfig
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToLong
 
-/** Textos de valores que se repiten en varias secciones. */
+/**
+ * Textos de valores que se repiten en varias secciones. Las cifras y unidades son iguales en todos los
+ * idiomas (punto decimal); las frases con palabras devuelven [UiText].
+ */
 object UiFormatters {
     private const val KBPS_PER_MBPS = 1000.0
     private const val MBPS_DECIMALS = 3
@@ -38,14 +42,19 @@ object UiFormatters {
     fun summary(config: ThrottleConfig): String =
         "${bandwidth(config.downKbps)} ↓ · ${bandwidth(config.upKbps)} ↑ · +${config.latencyMs} ms · ${loss(config)}"
 
-    fun jitter(config: ThrottleConfig): String {
-        val reorder = if (config.reorderPercent > 0f) " · reord. ${percent(config.reorderPercent)}" else ""
-        return "Jitter ±${config.jitterMs} ms$reorder"
+    fun jitter(config: ThrottleConfig): UiText = if (config.reorderPercent > 0f) {
+        UiText.res(R.string.summary_jitter_reorder, config.jitterMs, percent(config.reorderPercent))
+    } else {
+        UiText.res(R.string.summary_jitter, config.jitterMs)
     }
 
-    fun roundTripLoss(config: ThrottleConfig): String {
-        val bursts = if (config.lossBurstLength > 1) " · ráfagas de ${config.lossBurstLength}" else ""
-        return "Ida y vuelta ${percent(config.roundTripLossPercent)}$bursts"
+    fun roundTripLoss(config: ThrottleConfig): UiText {
+        val loss = percent(config.roundTripLossPercent)
+        return if (config.lossBurstLength > 1) {
+            UiText.res(R.string.summary_round_trip_bursts, loss, config.lossBurstLength)
+        } else {
+            UiText.res(R.string.summary_round_trip, loss)
+        }
     }
 
     /** 754 → "12:34"; 3754 → "1:02:34". */

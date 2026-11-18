@@ -3,6 +3,7 @@ package com.opennetsim.service
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
+import android.content.res.Configuration
 import android.net.Network
 import android.net.VpnService
 import android.os.Build
@@ -10,6 +11,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.ParcelFileDescriptor
 import android.system.ErrnoException
+import com.opennetsim.R
 import com.opennetsim.core.buffer.ByteBufferPool
 import com.opennetsim.core.time.MonotonicClock
 import com.opennetsim.model.NetworkTelemetry
@@ -120,7 +122,7 @@ class ThrottleVpnService : VpnService(), VpnSocketProtector {
      */
     override fun onRevoke() {
         diagnostics.log(DiagLevel.WARN, "tun.revoke", "El sistema revocó el permiso VPN")
-        stopTunnel(failureReason = REVOKED_REASON)
+        stopTunnel(failureReason = getString(R.string.failure_revoked))
         super.onRevoke()
     }
 
@@ -128,6 +130,16 @@ class ThrottleVpnService : VpnService(), VpnSocketProtector {
         stopTunnel()
         serviceScope.cancel()
         super.onDestroy()
+    }
+
+    /**
+     * Cambio de idioma (de la app o del sistema) u otra configuración: el canal y la notificación pasan al
+     * idioma nuevo. El túnel y sus condiciones de red no se tocan.
+     */
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        notifications.createChannel()
+        activeConfig?.let(notifications::show)
     }
 
     // ------------------------------------------------------------------ Arranque y restauración
@@ -163,7 +175,7 @@ class ThrottleVpnService : VpnService(), VpnSocketProtector {
         startForegroundCompat(config)
         networkMonitor.start()
         if (!startPipeline(config)) {
-            stopTunnel(failureReason = lastEstablishFailure ?: "No se pudo establecer el túnel VPN")
+            stopTunnel(failureReason = lastEstablishFailure ?: getString(R.string.failure_establish))
         }
     }
 
@@ -234,10 +246,14 @@ class ThrottleVpnService : VpnService(), VpnSocketProtector {
         override fun onFatalError(message: String) {
             mainHandler.post {
                 if (owner != null && owner === pipeline) {
-                    // Si la lectura falla porque otra VPN tomó el control, se informa como revocación.
-                    stopTunnel(
-                        failureReason = if (prepare(this@ThrottleVpnService) != null) REVOKED_REASON else message
-                    )
+                    // Si la lectura falla porque otra VPN tomó el control, se informa como revocación. El
+                    // detalle técnico (`message`) ya está en Logcat; al usuario se le da un motivo traducido.
+                    val reason = if (prepare(this@ThrottleVpnService) != null) {
+                        R.string.failure_revoked
+                    } else {
+                        R.string.failure_traffic_stopped
+                    }
+                    stopTunnel(failureReason = getString(reason))
                 }
             }
         }
@@ -280,7 +296,7 @@ class ThrottleVpnService : VpnService(), VpnSocketProtector {
         )
         tearDownPipeline()
         if (!startPipeline(config)) {
-            stopTunnel(failureReason = lastEstablishFailure ?: "No se pudo reconstruir el túnel tras un cambio de red")
+            stopTunnel(failureReason = lastEstablishFailure ?: getString(R.string.failure_rebuild))
         }
     }
 
@@ -318,13 +334,13 @@ class ThrottleVpnService : VpnService(), VpnSocketProtector {
                 diagnostics.warn("tun.establish", "No se pudo excluir la app del túnel; se confía en protect()", e)
             }
             builder.establish()
-                ?: recordEstablishFailure(ESTABLISH_REJECTED, null)
+                ?: recordEstablishFailure(getString(R.string.failure_establish_rejected), null)
         } catch (e: IllegalArgumentException) {
-            recordEstablishFailure("Parámetros del túnel rechazados", e)
+            recordEstablishFailure(getString(R.string.failure_parameters_rejected), e)
         } catch (e: IllegalStateException) {
-            recordEstablishFailure("Estado no válido al establecer el túnel", e)
+            recordEstablishFailure(getString(R.string.failure_invalid_state), e)
         } catch (e: SecurityException) {
-            recordEstablishFailure("Sin permiso para establecer el túnel", e)
+            recordEstablishFailure(getString(R.string.failure_no_permission), e)
         }
     }
 
@@ -374,11 +390,9 @@ class ThrottleVpnService : VpnService(), VpnSocketProtector {
         const val IPV4_PREFIX = 24
         const val IPV6_PREFIX = 64
         val DEFAULT_PRESET = ThrottlePreset.SLOW_3G
-        const val REVOKED_REASON = "Permiso VPN revocado: otra app VPN tomó el control o se desactivó en los ajustes"
         const val RESTORE_NO_PERMISSION = "Reinicio sin permiso VPN: no se establece el túnel"
         const val RESTORE_NO_CONFIG = "Reinicio sin configuración guardada"
         const val NET_GAINED_IPV6 = "La red física ahora tiene IPv6: se enruta por el túnel"
         const val NET_LOST_IPV6 = "La red física perdió IPv6: se bloquea"
-        const val ESTABLISH_REJECTED = "El sistema rechazó el túnel: falta el permiso VPN u otra VPN lo bloquea"
     }
 }

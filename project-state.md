@@ -147,6 +147,18 @@ Prototipo del usuario en Claude Design: «OpenNetSim · Prototipo Android M3» (
 
 ---
 
+### Fase 15: Inglés (versión 1.0.1, cambio OpenSpec `add-english-localization`, rama `feat/english-localization`)
+Petición del usuario (18/11/2026): añadir el inglés para la 1.0.1.
+- [x] Inglés por defecto (`values/`) y español para `es-*` (`values-es/`); idioma por app en Android 13+ (`locales_config.xml`), `localeFilters` (`en`, `es`) y AAB sin división por idioma (para que Play entregue los dos).
+- [x] Textos como recursos: la lógica JVM devuelve `UiText` (recurso + argumentos), que la interfaz resuelve al pintar, así que un aviso visible cambia de idioma con la app. `ThrottlePreset` (`:core`) sin textos; nombres traducidos en `PresetTexts`.
+- [x] Nombres de perfil guardado: no pueden coincidir con un predefinido en ningún idioma («3g lento», «slow 3g»).
+- [x] Servicio: notificación, canal y motivos de fallo traducidos, actualizados en `onConfigurationChanged`; los errores internos del pipeline se muestran con un motivo genérico traducido (el detalle sigue en Logcat).
+- [x] Tests con un renderizador de los `strings.xml` (`TestStrings`) que comprueba los textos reales en español y en inglés. 250 tests (1 omitido en Windows), cobertura 90,4 %, puerta de calidad en verde. Release de 1,28 MB (antes 1,37 MB: ya no lleva traducciones de librerías a otros idiomas).
+- [x] `versionCode` 2, `versionName` 1.0.1; README actualizado.
+- [x] Revisado en el emulador con API 37 (360 × 640 dp) en inglés y en español, incluido el cambio de idioma con la simulación activa (notificación y canal traducidos, túnel intacto), `es-MX`, `fr-FR` y el selector de idioma de la app en los ajustes del sistema.
+- [x] Verificación del usuario en su teléfono (18/11/2026) y cambio archivado en `openspec/changes/archive/2026-11-18-add-english-localization`; spec nueva `app-localization`.
+- [ ] Release `v1.0.1` en GitHub.
+
 ## Hoja de Ruta
 1. ~~Fidelidad de la simulación~~ (Fase 9).
 2. ~~Módulo `:core` y version catalog~~ (Fase 10).
@@ -166,6 +178,6 @@ Prototipo del usuario en Claude Design: «OpenNetSim · Prototipo Android M3» (
 
 ## Punto de Retorno (Checkpoint)
 - **Últimos archivos modificados:** `ui/` reescrita (pantallas en `ui/screens/`, `AboutDialog.kt`, `SupportLinks.kt`), `profiles/`, recursos de la pantalla de carga, `TunnelState`, `ThrottleVpnService` (instante de arranque), `.github/FUNDING.yml`, README y specs de `openspec/specs/`.
-- **Estado General:** Fases 1–14 en `develop` y `main`; versión 1.0.0 publicada en GitHub (etiqueta `v1.0.0` sobre `4017c41`).
+- **Estado General:** Fases 1–15 en `develop` y `main` (la 15, inglés para la 1.0.1, fusionada el 18/11/2026); versión 1.0.0 publicada en GitHub (etiqueta `v1.0.0` sobre `4017c41`); la 1.0.1 está en `main` sin publicar.
 - **Artefacto de Distribución:** release 1.0.0 en GitHub (`OpenNetSim-1.0.0.apk`); localmente, `app/build/outputs/apk/release/app-release.apk` (firmada con el keystore del usuario, configurado en `~/.gradle/gradle.properties`) y `app/build/outputs/apk/debug/app-debug.apk`.
-- **Siguiente acción inmediata:** revisión del README visual por el usuario; después, PR a `develop` y a `main`. Para versiones siguientes: subir `versionCode`/`versionName`, etiqueta `vX.Y.Z` y release con el mismo keystore.
+- **Siguiente acción inmediata:** etiqueta `v1.0.1` sobre `main` y release de GitHub con el APK firmado, cuando el usuario lo pida. Para versiones siguientes: subir `versionCode`/`versionName`, etiqueta `vX.Y.Z` y release con el mismo keystore.

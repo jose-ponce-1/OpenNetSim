@@ -41,9 +41,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.opennetsim.R
 import com.opennetsim.ui.components.BrandLogo
 import com.opennetsim.ui.components.IconBadge
 
@@ -103,13 +105,12 @@ private fun WelcomeIntro() {
         }
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
-                text = "Pon a prueba tu app en redes difíciles",
+                text = stringResource(R.string.welcome_title),
                 style = MaterialTheme.typography.headlineLarge,
                 modifier = Modifier.semantics { heading() }
             )
             Text(
-                text = "OpenNetSim simula 3G lento, Wi-Fi inestable o enlaces satelitales en este mismo " +
-                    "dispositivo, sin root.",
+                text = stringResource(R.string.welcome_subtitle),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -120,9 +121,9 @@ private fun WelcomeIntro() {
 @Composable
 private fun WelcomeFeatures() {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        FeatureRow(Icons.Outlined.SwapVert, "Limita subida y bajada por separado")
-        FeatureRow(Icons.Outlined.Timer, "Añade latencia, jitter y reordenación")
-        FeatureRow(Icons.Outlined.DisabledByDefault, "Pierde paquetes al azar o en ráfagas")
+        FeatureRow(Icons.Outlined.SwapVert, stringResource(R.string.welcome_feature_bandwidth))
+        FeatureRow(Icons.Outlined.Timer, stringResource(R.string.welcome_feature_latency))
+        FeatureRow(Icons.Outlined.DisabledByDefault, stringResource(R.string.welcome_feature_loss))
     }
 }
 
@@ -156,12 +157,7 @@ private fun WelcomeActions(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text(
-            text = if (denied) {
-                "Sin el permiso VPN no se puede simular la red. Se volverá a pedir al activar la simulación."
-            } else {
-                "Android pedirá permiso para crear una conexión VPN local. El tráfico no sale hacia ningún " +
-                    "servidor externo."
-            },
+            text = stringResource(if (denied) R.string.welcome_vpn_denied else R.string.welcome_vpn_note),
             style = MaterialTheme.typography.bodySmall,
             color = if (denied) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -170,7 +166,7 @@ private fun WelcomeActions(
             .heightIn(min = 56.dp)
         if (granted) {
             Button(onClick = onComplete, modifier = buttonModifier) {
-                Text("Empezar")
+                Text(stringResource(R.string.welcome_get_started))
                 Icon(
                     Icons.AutoMirrored.Outlined.ArrowForward,
                     contentDescription = null,
@@ -186,9 +182,14 @@ private fun WelcomeActions(
                     contentDescription = null,
                     modifier = Modifier.size(ButtonDefaults.IconSize)
                 )
-                Text("Permitir conexión VPN", modifier = Modifier.padding(start = ButtonDefaults.IconSpacing))
+                Text(
+                    stringResource(R.string.welcome_allow_vpn),
+                    modifier = Modifier.padding(start = ButtonDefaults.IconSpacing)
+                )
             }
-            TextButton(onClick = onComplete, modifier = buttonModifier) { Text("Ahora no") }
+            TextButton(onClick = onComplete, modifier = buttonModifier) {
+                Text(stringResource(R.string.welcome_not_now))
+            }
         }
     }
 }

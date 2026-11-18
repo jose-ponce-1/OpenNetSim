@@ -1,5 +1,7 @@
 package com.opennetsim.ui
 
+import androidx.annotation.StringRes
+import com.opennetsim.R
 import com.opennetsim.model.ThrottleConfig
 import java.util.Locale
 import kotlin.math.abs
@@ -15,23 +17,36 @@ enum class BandwidthUnit(val label: String) {
 
 /**
  * Parámetros editables de [ThrottleConfig]. [range] está en la unidad interna: kbps para el ancho de
- * banda; ms, % o paquetes para el resto. [decimals] son los decimales que se conservan.
+ * banda; ms, % o paquetes para el resto. [decimals] son los decimales que se conservan. [suffix] es la
+ * unidad: un texto igual en todos los idiomas ("ms", "%") o un recurso traducido.
  */
 enum class ParameterField(
-    val label: String,
+    @param:StringRes val labelRes: Int,
     val range: ClosedFloatingPointRange<Double>,
     val decimals: Int,
-    val suffix: String,
+    val suffix: UiText,
     val prefix: String = ""
 ) {
-    DOWN_KBPS("Bajada", 50.0..50_000.0, decimals = 0, suffix = "kbps"),
-    UP_KBPS("Subida", 20.0..20_000.0, decimals = 0, suffix = "kbps"),
-    LATENCY_MS("Latencia", 0.0..1000.0, decimals = 0, suffix = "ms", prefix = "+"),
-    JITTER_MS("Jitter", 0.0..200.0, decimals = 0, suffix = "ms", prefix = "±"),
-    REORDER_PERCENT("Reordenación", 0.0..ThrottleConfig.MAX_REORDER_PERCENT.toDouble(), decimals = 1, suffix = "%"),
-    UP_LOSS_PERCENT("Pérdida subida", 0.0..50.0, decimals = 1, suffix = "%"),
-    DOWN_LOSS_PERCENT("Pérdida bajada", 0.0..50.0, decimals = 1, suffix = "%"),
-    LOSS_BURST("Ráfaga media", 1.0..ThrottleConfig.MAX_LOSS_BURST_LENGTH.toDouble(), decimals = 0, suffix = "paquetes");
+    DOWN_KBPS(R.string.field_download, 50.0..50_000.0, decimals = 0, suffix = UiText.Raw("kbps")),
+    UP_KBPS(R.string.field_upload, 20.0..20_000.0, decimals = 0, suffix = UiText.Raw("kbps")),
+    LATENCY_MS(R.string.field_latency, 0.0..1000.0, decimals = 0, suffix = UiText.Raw("ms"), prefix = "+"),
+    JITTER_MS(R.string.field_jitter, 0.0..200.0, decimals = 0, suffix = UiText.Raw("ms"), prefix = "±"),
+    REORDER_PERCENT(
+        R.string.field_reorder,
+        0.0..ThrottleConfig.MAX_REORDER_PERCENT.toDouble(),
+        decimals = 1,
+        suffix = UiText.Raw("%")
+    ),
+    UP_LOSS_PERCENT(R.string.field_upload_loss, 0.0..50.0, decimals = 1, suffix = UiText.Raw("%")),
+    DOWN_LOSS_PERCENT(R.string.field_download_loss, 0.0..50.0, decimals = 1, suffix = UiText.Raw("%")),
+    LOSS_BURST(
+        R.string.field_loss_burst,
+        1.0..ThrottleConfig.MAX_LOSS_BURST_LENGTH.toDouble(),
+        decimals = 0,
+        suffix = UiText.res(R.string.unit_packets)
+    );
+
+    val label: UiText get() = UiText.res(labelRes)
 
     val isBandwidth: Boolean get() = this == DOWN_KBPS || this == UP_KBPS
 
@@ -71,15 +86,15 @@ enum class ParameterField(
 sealed interface ParameterParse {
     data class Valid(val value: Double) : ParameterParse
 
-    data class Invalid(val message: String) : ParameterParse
+    data class Invalid(val message: UiText) : ParameterParse
 }
 
 /** Estado de un campo tal y como lo pinta la sección Parámetros. */
 data class ParameterFieldState(
     val field: ParameterField,
     val text: String,
-    val error: String?,
-    val supportingText: String,
+    val error: UiText?,
+    val supportingText: UiText,
     val enabled: Boolean,
     val changed: Boolean
 )
@@ -100,7 +115,8 @@ object ParameterInput {
     fun parse(field: ParameterField, text: String, unit: BandwidthUnit): ParameterParse {
         val normalized = text.trim().replace(',', '.').ifEmpty { "0" }
         return when {
-            normalized == "." || !NUMBER.matches(normalized) -> ParameterParse.Invalid("Solo números")
+            normalized == "." || !NUMBER.matches(normalized) ->
+                ParameterParse.Invalid(UiText.res(R.string.field_error_numbers_only))
             else -> {
                 val typed = normalized.toDouble()
                 val internal = if (field.isBandwidth && unit == BandwidthUnit.MBPS) typed * KBPS_PER_MBPS else typed
@@ -108,7 +124,7 @@ object ParameterInput {
                 if (value in field.range) {
                     ParameterParse.Valid(value)
                 } else {
-                    ParameterParse.Invalid("Rango: ${rangeText(field)}")
+                    ParameterParse.Invalid(UiText.res(R.string.field_error_range, rangeText(field)))
                 }
             }
         }
@@ -123,15 +139,24 @@ object ParameterInput {
     fun drafts(config: ThrottleConfig, unit: BandwidthUnit): Map<ParameterField, String> =
         ParameterField.entries.associateWith { format(it, it.read(config), unit) }
 
-    fun suffix(field: ParameterField, unit: BandwidthUnit): String = if (field.isBandwidth) unit.label else field.suffix
+    fun suffix(field: ParameterField, unit: BandwidthUnit): UiText =
+        if (field.isBandwidth) UiText.Raw(unit.label) else field.suffix
 
-    fun rangeText(field: ParameterField): String {
+    /** "0 – 1000 ms", "1 – 10 paquetes", "50 kbps – 50 Mbps". */
+    fun rangeText(field: ParameterField): UiText {
         if (field.isBandwidth) {
-            return "${UiFormatters.bandwidth(field.range.start)} – ${UiFormatters.bandwidth(field.range.endInclusive)}"
+            return UiText.res(
+                R.string.value_range,
+                UiFormatters.bandwidth(field.range.start),
+                UiFormatters.bandwidth(field.range.endInclusive)
+            )
         }
-        val unit = if (field.suffix == "%") " %" else " ${field.suffix}"
-        val start = trimmed(field.range.start, field.decimals)
-        return "$start – ${trimmed(field.range.endInclusive, field.decimals)}$unit"
+        return UiText.res(
+            R.string.value_range_with_unit,
+            trimmed(field.range.start, field.decimals),
+            trimmed(field.range.endInclusive, field.decimals),
+            field.suffix
+        )
     }
 
     /** Estado de cada campo: texto escrito, error, ayuda, si está activo y si difiere de [base]. */
@@ -155,26 +180,29 @@ object ParameterInput {
     }
 
     /** Aviso bajo la cabecera de Parámetros según cuántos campos no son válidos. */
-    fun applyNote(invalidCount: Int): String = when (invalidCount) {
-        0 -> "Los valores válidos se aplican al instante, también con la simulación en curso."
-        1 -> "Hay 1 valor no válido: se mantiene el último correcto."
-        else -> "Hay $invalidCount valores no válidos: se mantienen los últimos correctos."
+    fun applyNote(invalidCount: Int): UiText = if (invalidCount == 0) {
+        UiText.res(R.string.apply_note_ok)
+    } else {
+        UiText.plural(R.plurals.apply_note_invalid, invalidCount)
     }
 
-    private fun hint(field: ParameterField, config: ThrottleConfig, unit: BandwidthUnit, enabled: Boolean): String {
+    private fun hint(field: ParameterField, config: ThrottleConfig, unit: BandwidthUnit, enabled: Boolean): UiText {
         val value = field.read(config)
         return when {
-            !enabled -> "Requiere latencia mayor que 0"
+            !enabled -> UiText.res(R.string.field_hint_requires_latency)
             field.isBandwidth -> {
                 val other = if (unit == BandwidthUnit.KBPS) {
                     "${trimmed(value / KBPS_PER_MBPS, MBPS_DECIMALS)} Mbps"
                 } else {
                     "${value.roundToLong()} kbps"
                 }
-                "= $other · ${trimmed(value / BITS_PER_BYTE, KBYTES_DECIMALS)} KB/s"
+                UiText.res(R.string.value_bandwidth_hint, other, trimmed(value / BITS_PER_BYTE, KBYTES_DECIMALS))
             }
-            field == ParameterField.LOSS_BURST ->
-                if (value <= 1.0) "1 = pérdidas independientes" else "Pérdidas en ráfagas de ${value.roundToInt()}"
+            field == ParameterField.LOSS_BURST -> if (value <= 1.0) {
+                UiText.res(R.string.field_hint_burst_independent)
+            } else {
+                UiText.res(R.string.field_hint_burst, value.roundToInt())
+            }
             else -> rangeText(field)
         }
     }

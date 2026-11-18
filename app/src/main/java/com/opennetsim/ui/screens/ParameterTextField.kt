@@ -12,15 +12,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
+import com.opennetsim.R
 import com.opennetsim.ui.BandwidthUnit
 import com.opennetsim.ui.ParameterField
 import com.opennetsim.ui.ParameterFieldState
 import com.opennetsim.ui.ParameterInput
 import com.opennetsim.ui.components.TabularNumbers
+import com.opennetsim.ui.components.asString
 
 /**
  * Campo de valor exacto. El texto que se está escribiendo vive aquí y se envía al ViewModel en cada
@@ -72,15 +75,18 @@ fun ParameterTextField(
         },
         enabled = state.enabled,
         textStyle = LocalTextStyle.current.merge(TabularNumbers),
-        label = { Text(if (state.changed) "${field.label} •" else field.label) },
+        label = {
+            val label = field.label.asString()
+            Text(if (state.changed) stringResource(R.string.field_changed, label) else label)
+        },
         placeholder = { Text(ParameterInput.format(field, 0.0, unit)) },
         prefix = if (field.prefix.isNotEmpty()) {
             { Text(field.prefix) }
         } else {
             null
         },
-        suffix = { Text(ParameterInput.suffix(field, unit)) },
-        supportingText = { Text(state.supportingText) },
+        suffix = { Text(ParameterInput.suffix(field, unit).asString()) },
+        supportingText = { Text(state.supportingText.asString()) },
         isError = state.error != null,
         keyboardOptions = KeyboardOptions(
             keyboardType = KeyboardType.Decimal,

@@ -47,14 +47,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import com.opennetsim.R
 import com.opennetsim.ui.MainUiState
 import com.opennetsim.ui.UiFormatters
 import com.opennetsim.ui.components.IconBadge
 import com.opennetsim.ui.components.SectionTitle
 import com.opennetsim.ui.components.StatTile
 import com.opennetsim.ui.components.TabularNumbers
+import com.opennetsim.ui.components.asString
 
 /** Sección Simular: control del túnel, perfiles, condiciones aplicadas y acceso a la telemetría. */
 @Composable
@@ -90,8 +93,7 @@ fun SimulateScreen(
                 modifier = Modifier.padding(horizontal = 16.dp)
             )
             Text(
-                text = "OpenNetSim captura el tráfico con el VpnService de Android y lo reenvía desde el propio " +
-                    "dispositivo. Sin servidores externos ni root.",
+                text = stringResource(R.string.simulate_footer),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 16.dp)
@@ -139,26 +141,36 @@ private fun HeroCard(state: MainUiState, onToggle: () -> Unit, modifier: Modifie
             AnimatedVisibility(visible = state.isActive) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     InfoChip(Icons.Outlined.Timer, UiFormatters.elapsed(state.activeSeconds))
-                    val families = if (state.ipv6Routed) "IPv4 + IPv6" else "Solo IPv4"
-                    InfoChip(Icons.Outlined.Lan, "$families · MTU 1500")
+                    val families = stringResource(
+                        if (state.ipv6Routed) R.string.families_dual_stack else R.string.families_ipv4_only
+                    )
+                    InfoChip(Icons.Outlined.Lan, stringResource(R.string.value_network_families, families))
                 }
             }
         }
     }
 }
 
-private fun heroTexts(state: MainUiState): Triple<String, String, String> = when {
-    state.isActive -> Triple(
-        "SIMULACIÓN EN CURSO",
-        state.selectedName,
-        "Aplicando el perfil a todo el tráfico. Toca para detener."
-    )
-    state.isStarting -> Triple("INICIANDO", state.selectedName, "Estableciendo el túnel VPN…")
-    else -> Triple(
-        "SIMULACIÓN DETENIDA",
-        "Red sin alterar",
-        "Toca para capturar el tráfico y aplicar «${state.selectedName}»."
-    )
+@Composable
+private fun heroTexts(state: MainUiState): Triple<String, String, String> {
+    val profile = state.selectedName.asString()
+    return when {
+        state.isActive -> Triple(
+            stringResource(R.string.hero_running_overline),
+            profile,
+            stringResource(R.string.hero_running_body)
+        )
+        state.isStarting -> Triple(
+            stringResource(R.string.hero_starting_overline),
+            profile,
+            stringResource(R.string.hero_starting_body)
+        )
+        else -> Triple(
+            stringResource(R.string.hero_stopped_overline),
+            stringResource(R.string.hero_stopped_title),
+            stringResource(R.string.hero_stopped_body, profile)
+        )
+    }
 }
 
 /** Interruptor decorativo: la tarjeta entera es el control (rol de interruptor). */
@@ -208,44 +220,66 @@ private fun AppliedConditions(
     val config = state.config
     val colors = MaterialTheme.colorScheme
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        SectionTitle("Condiciones aplicadas")
+        SectionTitle(stringResource(R.string.applied_conditions))
         TileRow(
             first = {
-                StatTile("Bajada", UiFormatters.bandwidth(config.downKbps), it) {
+                StatTile(stringResource(R.string.label_download), UiFormatters.bandwidth(config.downKbps), it) {
                     TileIcon(Icons.Outlined.Download, colors.primary)
                 }
             },
             second = {
-                StatTile("Subida", UiFormatters.bandwidth(config.upKbps), it) {
+                StatTile(stringResource(R.string.label_upload), UiFormatters.bandwidth(config.upKbps), it) {
                     TileIcon(Icons.Outlined.Upload, colors.primary)
                 }
             }
         )
         TileRow(
             first = {
-                StatTile("Latencia", "+${config.latencyMs} ms", it, UiFormatters.jitter(config)) {
+                StatTile(
+                    stringResource(R.string.label_latency),
+                    stringResource(R.string.value_latency, config.latencyMs),
+                    it,
+                    UiFormatters.jitter(config).asString()
+                ) {
                     TileIcon(Icons.Outlined.Timer, colors.tertiary)
                 }
             },
             second = {
-                StatTile("Pérdida", UiFormatters.loss(config), it, UiFormatters.roundTripLoss(config)) {
+                StatTile(
+                    stringResource(R.string.label_loss),
+                    UiFormatters.loss(config),
+                    it,
+                    UiFormatters.roundTripLoss(config).asString()
+                ) {
                     TileIcon(Icons.Outlined.DisabledByDefault, colors.error)
                 }
             }
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = onAdjust, modifier = Modifier.weight(1f)) {
-                Icon(Icons.Outlined.Tune, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
-                Text("Ajustar", modifier = Modifier.padding(start = ButtonDefaults.IconSpacing))
-            }
-            FilledTonalButton(onClick = onSave, modifier = Modifier.weight(1f)) {
-                Icon(
-                    Icons.Outlined.BookmarkAdd,
-                    contentDescription = null,
-                    modifier = Modifier.size(ButtonDefaults.IconSize)
-                )
-                Text("Guardar perfil", modifier = Modifier.padding(start = ButtonDefaults.IconSpacing))
-            }
+        ConditionActions(onAdjust = onAdjust, onSave = onSave)
+    }
+}
+
+/** Accesos a Parámetros y a guardar los valores actuales como perfil. */
+@Composable
+private fun ConditionActions(onAdjust: () -> Unit, onSave: () -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedButton(onClick = onAdjust, modifier = Modifier.weight(1f)) {
+            Icon(Icons.Outlined.Tune, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+            Text(
+                stringResource(R.string.action_adjust),
+                modifier = Modifier.padding(start = ButtonDefaults.IconSpacing)
+            )
+        }
+        FilledTonalButton(onClick = onSave, modifier = Modifier.weight(1f)) {
+            Icon(
+                Icons.Outlined.BookmarkAdd,
+                contentDescription = null,
+                modifier = Modifier.size(ButtonDefaults.IconSize)
+            )
+            Text(
+                stringResource(R.string.action_save_profile),
+                modifier = Modifier.padding(start = ButtonDefaults.IconSpacing)
+            )
         }
     }
 }
@@ -284,13 +318,17 @@ private fun TelemetryShortcut(state: MainUiState, onClick: () -> Unit, modifier:
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer
             )
             Column(modifier = Modifier.weight(1f)) {
-                Text("Telemetría en vivo", style = MaterialTheme.typography.bodyLarge)
+                Text(stringResource(R.string.telemetry_shortcut_title), style = MaterialTheme.typography.bodyLarge)
                 Text(
                     text = if (state.isActive) {
                         val telemetry = state.telemetry
-                        "↓ ${telemetry.formattedDownThroughput()}  ·  ↑ ${telemetry.formattedUpThroughput()}"
+                        stringResource(
+                            R.string.value_throughput_pair,
+                            telemetry.formattedDownThroughput(),
+                            telemetry.formattedUpThroughput()
+                        )
                     } else {
-                        "Inicia la simulación para ver métricas"
+                        stringResource(R.string.telemetry_shortcut_idle)
                     },
                     style = MaterialTheme.typography.bodyMedium.merge(TabularNumbers),
                     color = MaterialTheme.colorScheme.onSurfaceVariant

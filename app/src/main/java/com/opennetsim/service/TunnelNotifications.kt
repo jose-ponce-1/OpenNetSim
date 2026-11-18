@@ -11,9 +11,11 @@ import androidx.core.app.NotificationCompat
 import com.opennetsim.R
 import com.opennetsim.model.ThrottleConfig
 import com.opennetsim.ui.MainActivity
+import com.opennetsim.ui.PresetTexts
 
 /**
- * Canal y notificación persistente del servicio en primer plano.
+ * Canal y notificación persistente del servicio en primer plano, en el idioma activo de la app. Volver a
+ * crear el canal con el mismo id solo actualiza su nombre y descripción.
  */
 class TunnelNotifications(private val context: Context) {
     private val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
@@ -22,10 +24,10 @@ class TunnelNotifications(private val context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "OpenNetSim VPN Service",
+                context.getString(R.string.notification_channel_name),
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Notificación persistente de control del motor de throttling"
+                description = context.getString(R.string.notification_channel_description)
                 setShowBadge(false)
             }
             manager?.createNotificationChannel(channel)
@@ -54,15 +56,24 @@ class TunnelNotifications(private val context: Context) {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val contentText = "${config.preset.displayName} • ↓${config.formattedDownBandwidth()} " +
-            "↑${config.formattedUpBandwidth()} • +${config.latencyMs}ms"
+        val contentText = context.getString(
+            R.string.notification_text,
+            context.getString(PresetTexts.nameRes(config.preset)),
+            config.formattedDownBandwidth(),
+            config.formattedUpBandwidth(),
+            config.latencyMs
+        )
 
         return NotificationCompat.Builder(context, CHANNEL_ID)
-            .setContentTitle("OpenNetSim Activo")
+            .setContentTitle(context.getString(R.string.notification_title))
             .setContentText(contentText)
             .setSmallIcon(R.drawable.ic_stat_opennetsim)
             .setContentIntent(openAppPendingIntent)
-            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Detener", stopPendingIntent)
+            .addAction(
+                android.R.drawable.ic_menu_close_clear_cancel,
+                context.getString(R.string.action_stop),
+                stopPendingIntent
+            )
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
