@@ -17,7 +17,10 @@ The main goal of OpenNetSim is to provide developers, QA engineers, and network 
 - **Latency, Jitter & Reordering:** Simulates round-trip time (RTT) delays and their variation without reordering packets, plus an optional reordering percentage (like `netem reorder`).
 - **Packet Loss Simulation:** Separate upload and download loss rates, either independent or in bursts (Gilbert model).
 - **Userspace L3/L4 Network Stack:** Pure Kotlin network forwarders for TCP (with flow control), UDP (DNS and streaming), and ICMP echo (`ping` is forwarded to the real network with unprivileged ping sockets, so its RTT is the real one plus the configured degradation and unreachable hosts do not answer), featuring **IPv4 & IPv6 Dual-Stack** compatibility.
-- **Intuitive UI & Live Telemetry:** Built with **Jetpack Compose** and Material 3, offering quick condition presets (3G, Flaky Wi-Fi, Satellite, etc.), manual sliders, and real-time throughput and drop metrics.
+- **Material 3 UI (light & dark):** Built with **Jetpack Compose** in the official OpenNetSim palette, with an animated splash screen, a first-run welcome that requests the VPN permission, and three sections:
+  - **Simulate:** one-tap tunnel switch with active time, condition presets (3G, Flaky Wi-Fi, Satellite, etc.) and your own **saved profiles** (save, delete, undo).
+  - **Parameters:** exact values typed in text fields (bandwidth in kbps or Mbps), with validation that never sends an invalid value to the tunnel and a one-tap reset to the base profile.
+  - **Telemetry:** live 60-second throughput chart against the configured limit, transferred/dropped/retransmitted counters and tunnel status.
 
 ---
 
@@ -39,10 +42,14 @@ OpenNetSim/
 └── app/                     # Gradle module :app: Android application
     └── com/opennetsim/
         ├── tunnel/          # TunnelController and ConfigStore: the only contract the UI sees
+        ├── profiles/        # User-saved connection profiles and their persistence
         ├── service/         # VpnService lifecycle, notifications, intents and config persistence
         │   ├── pipeline/    # TunnelPipeline: TUN loops + engine + forwarders (JVM-testable)
         │   └── forwarder/   # Userspace TCP/UDP forwarders and real ICMP (ping) forwarder
-        └── ui/              # Jetpack Compose screens, ViewModels and Material 3 design
+        └── ui/              # ViewModel and JVM-tested UI logic (fields, profiles, chart)
+            ├── screens/     # Compose screens: welcome, simulate, parameters, telemetry
+            ├── components/  # Shared Compose components
+            └── theme/       # Official palette (light/dark) and typography
 ```
 
 ---

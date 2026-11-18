@@ -1,95 +1,74 @@
 package com.opennetsim.ui
 
-import android.Manifest
-import android.app.Activity
-import android.content.pm.PackageManager
-import android.net.VpnService
-import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
+import android.view.animation.PathInterpolator
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
-import androidx.compose.ui.platform.LocalContext
-import androidx.core.content.ContextCompat
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.core.splashscreen.SplashScreenViewProvider
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.opennetsim.profiles.SharedPreferencesProfileStore
 import com.opennetsim.service.ServiceTunnelController
+import com.opennetsim.ui.preferences.SharedPreferencesUiPreferences
+import com.opennetsim.ui.screens.OpenNetSimApp
 import com.opennetsim.ui.theme.OpenNetSimTheme
 
 class MainActivity : ComponentActivity() {
 
-    // Raíz de composición: el único punto de la UI que conoce la implementación del túnel.
+    // Raíz de composición: el único punto de la UI que conoce las implementaciones Android.
     private val viewModel: MainViewModel by viewModels {
         viewModelFactory {
-            initializer { MainViewModel(ServiceTunnelController(applicationContext)) }
+            initializer {
+                MainViewModel(
+                    tunnel = ServiceTunnelController(applicationContext),
+                    profileStore = SharedPreferencesProfileStore(applicationContext),
+                    preferences = SharedPreferencesUiPreferences(applicationContext)
+                )
+            }
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen().setOnExitAnimationListener(::animateSplashExit)
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
         setContent {
             OpenNetSimTheme {
-                MainAppContent(viewModel = viewModel)
-            }
-        }
-    }
-}
-
-@Composable
-fun MainAppContent(viewModel: MainViewModel) {
-    val context = LocalContext.current
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-
-    // Launcher para permisos de notificación en Android 13+ (API 33+)
-    val notificationPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { _ -> }
-
-    LaunchedEffect(Unit) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
-            PackageManager.PERMISSION_GRANTED
-        ) {
-            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-        }
-    }
-
-    // El diálogo del sistema para el permiso VPN necesita una Activity; el resto lo decide el ViewModel.
-    val vpnLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        viewModel.onVpnPermissionResult(result.resultCode == Activity.RESULT_OK)
-    }
-
-    LaunchedEffect(uiState.requestVpnPermission) {
-        if (uiState.requestVpnPermission) {
-            val vpnIntent = VpnService.prepare(context)
-            if (vpnIntent != null) {
-                vpnLauncher.launch(vpnIntent)
-                viewModel.clearVpnPermissionRequest()
-            } else {
-                viewModel.onVpnPermissionResult(true)
+                OpenNetSimApp(viewModel = viewModel)
             }
         }
     }
 
-    val actions = remember(viewModel) {
-        DashboardActions(
-            onPresetSelect = viewModel::selectPreset,
-            onConfigChange = viewModel::editConfig,
-            onToggleClick = viewModel::onToggleClicked,
-            onSnackbarDismiss = viewModel::clearMessage
-        )
+    /**
+     * Salida de la pantalla de carga: espera a que termine la animación del icono (Android 12+, como
+     * mucho su duración) y lo agranda y desvanece. Con las animaciones del sistema desactivadas, la
+     * duración escalada es 0 y la salida es inmediata.
+     */
+    private fun animateSplashExit(provider: SplashScreenViewProvider) {
+        val iconEnd = provider.iconAnimationStartMillis + provider.iconAnimationDurationMillis
+        val wait = (iconEnd - SystemClock.uptimeMillis()).coerceIn(0L, MAX_ICON_WAIT_MS)
+        provider.iconView.animate()
+            .setStartDelay(wait)
+            .setDuration(EXIT_DURATION_MS)
+            .setInterpolator(EXIT_EASING)
+            .scaleX(EXIT_SCALE)
+            .scaleY(EXIT_SCALE)
+            .alpha(0f)
+            .withEndAction { provider.remove() }
+            .start()
     }
-    ThrottleDashboardScreen(uiState = uiState, actions = actions)
+
+    private companion object {
+        const val MAX_ICON_WAIT_MS = 1_000L
+        const val EXIT_DURATION_MS = 320L
+        const val EXIT_SCALE = 1.12f
+
+        /** Aceleración enfatizada de Material 3 para elementos que salen. */
+        val EXIT_EASING = PathInterpolator(0.3f, 0f, 0.8f, 0.15f)
+    }
 }

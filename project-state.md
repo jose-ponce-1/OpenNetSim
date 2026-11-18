@@ -126,6 +126,19 @@ Decisiones del usuario (17/11/2026), tomadas comparando con `tc netem`, Network 
 - [x] `reduce-detekt-baselines` (PR #14): baseline de `:core` eliminada (106 entradas al empezar la puerta de calidad, 0 ahora) y la de `:app` de 32 a 18, todas de `Color.kt` y `ThrottleDashboardScreen.kt` (paso 6). Parsers con constantes con nombre y validación en helpers sin empaquetado. Memoria por paquete igual; +2 ns en el parseo TCP.
 - [x] CI en verde en los cuatro PR, verificación en dispositivo de los que cambian los forwarders (usuario, 17/11/2026) y los cinco cambios del paso 5 archivados en `openspec/changes/archive/2026-11-17-*`.
 
+### Fase 14: Nueva interfaz Material 3 (paso 6, cambio OpenSpec `redesign-material3-ui`, rama `feat/new-ui`)
+Prototipo del usuario en Claude Design: «OpenNetSim · Prototipo Android M3» (https://claude.ai/artifact/NocdzNk2d7m6jUSdgNYeVT, 18/11/2026), cinco pantallas.
+- [x] Paleta oficial del prototipo (Material 3, semilla `#3F5F90`) en claro y oscuro según el sistema; fuente del sistema.
+- [x] Pantalla de carga con `core-splashscreen` 1.0.1: logo animado en API 31+ (~1 s) y estático en API 26–30.
+- [x] Bienvenida del primer arranque con el permiso VPN (diálogo del sistema, sin arrancar el túnel) y navegación inferior Simular / Parámetros / Telemetría.
+- [x] Perfiles guardados por el usuario (guardar, eliminar, «Deshacer»; SharedPreferences `saved_profiles`). El perfil elegido se reconoce por los valores; eliminar el elegido nunca cambia la red.
+- [x] Campos de valor exacto en lugar de sliders: kbps/Mbps (unidad recordada), coma o punto decimal, rangos con mensaje, el texto no válido nunca llega al túnel; perfil base con «Restablecer» y «Deshacer».
+- [x] Telemetría: gráfica de 60 s frente al límite, contadores y estado del túnel. `TunnelState.Running.startedAtMs` (lo fija el servicio) para que el tiempo activo sobreviva a recrear la actividad.
+- [x] Lógica de la interfaz en clases JVM probadas (239 tests, 1 omitido en Windows); cobertura 90,0 % (antes 87,6 %). Baseline de detekt de `:app` eliminada: ningún módulo tiene baseline.
+- [ ] Puerta de calidad: con el código final, compilación, detekt, tests, Kover y benchmark en verde; `lintDebug` y `assembleRelease` (R8, 1,37 MB) pasaron antes de los últimos retoques visuales y falta repetirlos (la última ejecución se cortó por falta de memoria en el equipo).
+- [x] Revisado en el emulador `Small_Phone` (Android 10, 360×640 dp): bienvenida, las tres secciones, hoja de perfiles, guardar/deshacer, valores no válidos, túnel activo con tráfico, modo oscuro y Atrás. Ajustes tras la revisión: degradados de los chips, selector de unidad que baja de línea en pantallas estrechas y sin icono de error dentro de los campos.
+- [ ] Verificación del usuario en dispositivo (Android 12+ para la animación de la pantalla de carga) y CI del PR.
+
 ---
 
 ## Hoja de Ruta
@@ -135,15 +148,12 @@ Decisiones del usuario (17/11/2026), tomadas comparando con `tc netem`, Network 
 4. ~~Preparar la release~~ (Fase 12).
 5. ~~Rendimiento y deuda~~ (Fase 13): microbenchmark y optimización del camino de cada paquete, baselines de detekt y cobertura con Kover.
    - Test de velocidad de Google cancelado y repetido enseguida (observado por el usuario el 17/11/2026 con la release): mide menos de lo configurado; si se deja terminar, el siguiente es normal. Causa medida: los sockets TCP exteriores acumulaban varios MB sin leer en el kernel (hasta 6,9 MB por conexión), que se seguían entregando por el límite. Resuelto en el cambio `clamp-outer-receive-window` (PR #11, archivado): `SO_RCVBUF` y `TCP_WINDOW_CLAMP` proporcionales a la red simulada, ajustables en caliente. Verificado por el usuario con el test oficial de M-Lab recargado 5–6 veces a mitad de prueba, sin pérdida; el de Google no se pudo repetir (IP bloqueada temporalmente).
-6. Nueva interfaz (pedido por el usuario el 17/11/2026):
-   - Sustituir los sliders por campos para escribir el valor exacto (ancho de banda en kbps/Mbps, como otras apps; también latencia, jitter y porcentajes).
-   - Paleta de colores oficial de OpenNetSim. Colores del logo encontrados en `res/drawable` (pendientes de que el usuario confirme los oficiales o envíe prototipos): `#0067C6`, `#00C4FF`, `#67E8F9` y `#FFFFFF`.
-   - Pantalla de inicio con el logo (API SplashScreen de Android 12 mediante `androidx.core:core-splashscreen` para API 26+).
+6. Nueva interfaz (Fase 14, pendiente de la verificación en dispositivo): campos de valor exacto, paleta oficial del prototipo del usuario y pantalla de carga con el logo.
 
 ---
 
 ## Punto de Retorno (Checkpoint)
-- **Últimos archivos modificados:** parsers de `core/packet`, forwarders, `benchmark/`, configuración de Kover y detekt, y los cambios archivados del paso 5.
-- **Estado General:** Fases 1–11 en `develop` y `main`; Fases 12 y 13 en `develop` (PR #10–#14), pendientes de llevar a `main`.
+- **Últimos archivos modificados:** `ui/` reescrita (pantallas en `ui/screens/`), `profiles/`, recursos de la pantalla de carga, `TunnelState`, `ThrottleVpnService` (instante de arranque) y el cambio `openspec/changes/redesign-material3-ui`.
+- **Estado General:** Fases 1–11 en `develop` y `main`; Fases 12 y 13 en `develop` (PR #10–#14), pendientes de llevar a `main`; Fase 14 en la rama `feat/new-ui`, sin commit.
 - **Artefacto de Distribución:** APK de depuración en `app/build/outputs/apk/debug/app-debug.apk`; release firmada en `app/build/outputs/apk/release/app-release.apk` (keystore del usuario, fuera del repositorio).
-- **Siguiente acción inmediata:** paso 6 de la hoja de ruta (nueva interfaz); antes, confirmar con el usuario la paleta oficial. Cuando el usuario lo pida, llevar `develop` a `main`.
+- **Siguiente acción inmediata:** verificación en dispositivo de la Fase 14 por el usuario; después commit, PR hacia `develop`, CI y archivar `redesign-material3-ui`. Cuando el usuario lo pida, llevar `develop` a `main`.

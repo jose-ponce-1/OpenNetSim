@@ -43,6 +43,13 @@ class NetworkTelemetryTest {
     }
 
     @Test
+    fun testRetransmittedDataFormatting() {
+        assertEquals("0 B", NetworkTelemetry().formattedRetransmittedData())
+        assertEquals("296.0 KB", NetworkTelemetry(retransmittedBytes = 296_000).formattedRetransmittedData())
+        assertEquals("1.2 MB", NetworkTelemetry(retransmittedBytes = 1_200_000).formattedRetransmittedData())
+    }
+
+    @Test
     fun testDownloadWithRetransmissionsExcludesThemFromGoodput() {
         val sampler = TelemetrySampler(startMs = 0L)
         sampler.sample(TrafficCounters(), nowMs = 0L)
