@@ -67,7 +67,7 @@ internal fun AboutDialog(onDismiss: () -> Unit) {
                 AboutSection(
                     title = "Código abierto",
                     text = "OpenNetSim es de código abierto, con licencia Apache 2.0: puedes usarlo, estudiarlo, " +
-                        "modificarlo y compartirlo libremente."
+                        "modificarlo y compartirlo libremente. Se ofrece tal cual, sin garantías de ningún tipo."
                 ) {
                     OutlinedButton(onClick = { openLink(context, SupportLinks.SOURCE_CODE_URL) }) {
                         ButtonIcon(Icons.Outlined.Code)

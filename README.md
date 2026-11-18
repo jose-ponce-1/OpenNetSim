@@ -110,3 +110,8 @@ OpenNetSim is free, open source and ad-free. If you find it useful, you can supp
 ## 📄 License
 
 This project is licensed under the Apache License 2.0. See the [LICENSE.txt](LICENSE.txt) file for details.
+
+OpenNetSim is provided **"as is", without warranty of any kind**, express or implied, and the authors are
+not liable for any damage arising from its use (sections 7 and 8 of the license). It changes how your
+device's traffic flows while the simulation is active: use it for testing, not as a security or privacy
+tool.
