@@ -66,6 +66,9 @@ class ThrottleVpnService : VpnService(), VpnSocketProtector {
 
     /** True si el pipeline actual enruta IPv6 (la red física tenía IPv6 al establecerlo). */
     private var ipv6Routed = false
+
+    /** Arranque del túnel actual (reloj monotónico); se conserva al reconstruir el pipeline. */
+    private var startedAtMs = 0L
     private var lastEstablishFailure: String? = null
 
     private val networkMonitor by lazy {
@@ -156,6 +159,7 @@ class ThrottleVpnService : VpnService(), VpnSocketProtector {
             return
         }
         TunnelStatusStore.publish(TunnelState.Starting)
+        startedAtMs = clock.nowMs()
         startForegroundCompat(config)
         networkMonitor.start()
         if (!startPipeline(config)) {
@@ -205,7 +209,7 @@ class ThrottleVpnService : VpnService(), VpnSocketProtector {
         pipeline = newPipeline
         ipv6Routed = routeIpv6
         rememberConfig(config)
-        TunnelStatusStore.publish(TunnelState.Running(config, ipv6Routed = routeIpv6))
+        TunnelStatusStore.publish(TunnelState.Running(config, ipv6Routed = routeIpv6, startedAtMs = startedAtMs))
         newPipeline.start()
         return true
     }
@@ -249,7 +253,7 @@ class ThrottleVpnService : VpnService(), VpnSocketProtector {
         val current = pipeline ?: return
         current.updateConfig(config)
         rememberConfig(config)
-        TunnelStatusStore.publish(TunnelState.Running(config, ipv6Routed))
+        TunnelStatusStore.publish(TunnelState.Running(config, ipv6Routed, startedAtMs))
         notifications.show(config)
     }
 

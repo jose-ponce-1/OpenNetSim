@@ -126,6 +126,25 @@ Decisiones del usuario (17/11/2026), tomadas comparando con `tc netem`, Network 
 - [x] `reduce-detekt-baselines` (PR #14): baseline de `:core` eliminada (106 entradas al empezar la puerta de calidad, 0 ahora) y la de `:app` de 32 a 18, todas de `Color.kt` y `ThrottleDashboardScreen.kt` (paso 6). Parsers con constantes con nombre y validación en helpers sin empaquetado. Memoria por paquete igual; +2 ns en el parseo TCP.
 - [x] CI en verde en los cuatro PR, verificación en dispositivo de los que cambian los forwarders (usuario, 17/11/2026) y los cinco cambios del paso 5 archivados en `openspec/changes/archive/2026-11-17-*`.
 
+### Fase 14: Nueva interfaz Material 3 (paso 6, cambio OpenSpec `redesign-material3-ui`, rama `feat/new-ui`)
+Prototipo del usuario en Claude Design: «OpenNetSim · Prototipo Android M3» (https://claude.ai/artifact/NocdzNk2d7m6jUSdgNYeVT, 18/11/2026), cinco pantallas.
+- [x] Paleta oficial del prototipo (Material 3, semilla `#3F5F90`) en claro y oscuro según el sistema; fuente del sistema.
+- [x] Pantalla de carga con `core-splashscreen` 1.0.1: logo animado en API 31+ (~1 s) y estático en API 26–30.
+- [x] Bienvenida del primer arranque con el permiso VPN (diálogo del sistema, sin arrancar el túnel) y navegación inferior Simular / Parámetros / Telemetría.
+- [x] Perfiles guardados por el usuario (guardar, eliminar, «Deshacer»; SharedPreferences `saved_profiles`). El perfil elegido se reconoce por los valores; eliminar el elegido nunca cambia la red.
+- [x] Campos de valor exacto en lugar de sliders: kbps/Mbps (unidad recordada), coma o punto decimal, rangos con mensaje, el texto no válido nunca llega al túnel; perfil base con «Restablecer» y «Deshacer».
+- [x] Telemetría: gráfica de 60 s frente al límite, contadores y estado del túnel. `TunnelState.Running.startedAtMs` (lo fija el servicio) para que el tiempo activo sobreviva a recrear la actividad.
+- [x] Lógica de la interfaz en clases JVM probadas (239 tests, 1 omitido en Windows); cobertura 90,2 % (antes 87,6 %). Baseline de detekt de `:app` eliminada: ningún módulo tiene baseline.
+- [x] Puerta de calidad completa en verde con el código final (18/11/2026): compilación, detekt, `lintDebug`, tests, Kover, benchmark y `assembleRelease` (R8, 1,36 MB).
+- [x] Animación de la pantalla de carga vista en el emulador con API 37. Al verla apareció un fallo: en Android 12+, `core-splashscreen` aplica al salir las barras del sistema del tema y deshacía `enableEdgeToEdge()` (iconos de la barra de estado blancos sobre fondo claro). Corregido en `MainActivity`; comprobado en claro, en oscuro y con las animaciones desactivadas.
+- [x] Carrera en el test `IcmpForwarderTest.idleSessionIsClosedAfterTimeout` (anterior a este cambio; falló una vez en la puerta de calidad): esperaba el cierre de la sesión inactiva pero no la apertura de la nueva. Solo cambia el test; 8 de 8 repeticiones en verde.
+- [x] Revisado en el emulador `Small_Phone` (Android 10, 360×640 dp): bienvenida, las tres secciones, hoja de perfiles, guardar/deshacer, valores no válidos, túnel activo con tráfico, modo oscuro y Atrás. Ajustes tras la revisión: degradados de los chips, selector de unidad que baja de línea en pantallas estrechas y sin icono de error dentro de los campos.
+- [x] Verificación del usuario en su teléfono Android (18/11/2026): la interfaz y la app funcionan bien.
+- [x] Ajustes pedidos tras esa prueba: un campo vacío de Parámetros equivale a 0 (donde 0 está fuera de rango, error de rango y se mantiene el último valor válido) y firma «Hecho con ♥ por Jose Ponce» en «Acerca de». 242 tests y puerta de calidad completa en verde; revisado en el emulador.
+- [x] Código abierto y donaciones en «Acerca de» (decisión del usuario, 18/11/2026: distribución en GitHub y Google Play, donaciones con Ko-fi): apartado «Código abierto» con «Ver el código en GitHub» y apartado «Apoya el proyecto» con «Apoyar en Ko-fi», que no aparece si la app la instaló Google Play (su política de pagos no permite enlazar a otro medio de pago). 245 tests y puerta de calidad en verde; revisado en el emulador.
+- [x] Ko-fi del autor (`https://ko-fi.com/joseponce`) en la app, en `.github/FUNDING.yml` (botón «Sponsor» del repositorio) y en el README.
+- [x] Prueba del usuario en su teléfono (18/11/2026: el enlace a Ko-fi funciona), CI en verde (PR #16) y cambio archivado en `openspec/changes/archive/2026-11-18-redesign-material3-ui`; specs nuevas `app-navigation`, `connection-profiles`, `live-telemetry` y `parameter-editing`.
+
 ---
 
 ## Hoja de Ruta
@@ -135,15 +154,18 @@ Decisiones del usuario (17/11/2026), tomadas comparando con `tc netem`, Network 
 4. ~~Preparar la release~~ (Fase 12).
 5. ~~Rendimiento y deuda~~ (Fase 13): microbenchmark y optimización del camino de cada paquete, baselines de detekt y cobertura con Kover.
    - Test de velocidad de Google cancelado y repetido enseguida (observado por el usuario el 17/11/2026 con la release): mide menos de lo configurado; si se deja terminar, el siguiente es normal. Causa medida: los sockets TCP exteriores acumulaban varios MB sin leer en el kernel (hasta 6,9 MB por conexión), que se seguían entregando por el límite. Resuelto en el cambio `clamp-outer-receive-window` (PR #11, archivado): `SO_RCVBUF` y `TCP_WINDOW_CLAMP` proporcionales a la red simulada, ajustables en caliente. Verificado por el usuario con el test oficial de M-Lab recargado 5–6 veces a mitad de prueba, sin pérdida; el de Google no se pudo repetir (IP bloqueada temporalmente).
-6. Nueva interfaz (pedido por el usuario el 17/11/2026):
-   - Sustituir los sliders por campos para escribir el valor exacto (ancho de banda en kbps/Mbps, como otras apps; también latencia, jitter y porcentajes).
-   - Paleta de colores oficial de OpenNetSim. Colores del logo encontrados en `res/drawable` (pendientes de que el usuario confirme los oficiales o envíe prototipos): `#0067C6`, `#00C4FF`, `#67E8F9` y `#FFFFFF`.
-   - Pantalla de inicio con el logo (API SplashScreen de Android 12 mediante `androidx.core:core-splashscreen` para API 26+).
+6. ~~Nueva interfaz~~ (Fase 14, PR #16).
+7. Primera versión oficial: llevar `develop` a `main`, etiqueta `v1.0.0` y release de GitHub con `app-release.apk` firmado (keystore del usuario). Después, README más visual (capturas de la app y animación del logo) sin perder la información técnica.
+8. Mejoras opcionales anotadas por el usuario (18/11/2026):
+   - El aviso «Desliza para ver n perfiles más» y la animación de los chips reaparecen al volver a Simular desde otra sección. Causa: su estado vive en el composable de Simular (`ProfileChips.kt`, `remember`/`rememberSaveable`) y se pierde al salir de la composición. Arreglo posible: guardarlo en el ViewModel o en `UiPreferences` (mostrarlo solo las primeras veces). No le molesta por ahora.
+   - Pantalla «Licencias de código abierto» con las librerías incluidas (como AntennaPod; la licencia Apache de AndroidX y Kotlin pide entregar su texto al redistribuirlas). Recomendada, no pedida aún.
+   - Ojo con Google Play: la versión de Play enlaza al repositorio, cuya página y README enlazan a Ko-fi; un revisor podría considerarlo un camino indirecto al pago.
+   - Publicación en Google Play: necesitará un AAB (`bundleRelease`) en lugar del APK.
 
 ---
 
 ## Punto de Retorno (Checkpoint)
-- **Últimos archivos modificados:** parsers de `core/packet`, forwarders, `benchmark/`, configuración de Kover y detekt, y los cambios archivados del paso 5.
-- **Estado General:** Fases 1–11 en `develop` y `main`; Fases 12 y 13 en `develop` (PR #10–#14), pendientes de llevar a `main`.
+- **Últimos archivos modificados:** `ui/` reescrita (pantallas en `ui/screens/`, `AboutDialog.kt`, `SupportLinks.kt`), `profiles/`, recursos de la pantalla de carga, `TunnelState`, `ThrottleVpnService` (instante de arranque), `.github/FUNDING.yml`, README y specs de `openspec/specs/`.
+- **Estado General:** Fases 1–11 en `develop` y `main`; Fases 12–14 en `develop` (PR #10–#14 y #16), pendientes de llevar a `main` (PR de `develop` a `main` abierto el 18/11/2026).
 - **Artefacto de Distribución:** APK de depuración en `app/build/outputs/apk/debug/app-debug.apk`; release firmada en `app/build/outputs/apk/release/app-release.apk` (keystore del usuario, fuera del repositorio).
-- **Siguiente acción inmediata:** paso 6 de la hoja de ruta (nueva interfaz); antes, confirmar con el usuario la paleta oficial. Cuando el usuario lo pida, llevar `develop` a `main`.
+- **Siguiente acción inmediata:** merge del PR de `develop` a `main`; después, etiqueta `v1.0.0` y release de GitHub con el APK firmado, y README visual (hoja de ruta, punto 8).

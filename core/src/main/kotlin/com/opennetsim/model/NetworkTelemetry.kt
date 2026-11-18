@@ -35,15 +35,16 @@ data class NetworkTelemetry(
     /**
      * Formatea el volumen acumulado transferido.
      */
-    fun formattedTotalData(): String {
+    fun formattedTotalData(): String = formatBytes(totalTransferredBytes)
+
+    /** Formatea los bytes acumulados retransmitidos por el túnel. */
+    fun formattedRetransmittedData(): String = formatBytes(retransmittedBytes)
+
+    private fun formatBytes(bytes: Long): String {
         return when {
-            totalTransferredBytes >= BYTES_PER_MB -> {
-                String.format(Locale.US, "%.1f MB", totalTransferredBytes / BYTES_PER_MB.toDouble())
-            }
-            totalTransferredBytes >= BYTES_PER_KB -> {
-                String.format(Locale.US, "%.1f KB", totalTransferredBytes / BYTES_PER_KB.toDouble())
-            }
-            else -> "$totalTransferredBytes B"
+            bytes >= BYTES_PER_MB -> String.format(Locale.US, "%.1f MB", bytes / BYTES_PER_MB.toDouble())
+            bytes >= BYTES_PER_KB -> String.format(Locale.US, "%.1f KB", bytes / BYTES_PER_KB.toDouble())
+            else -> "$bytes B"
         }
     }
 
