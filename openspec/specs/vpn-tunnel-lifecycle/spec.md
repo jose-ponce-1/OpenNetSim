@@ -55,21 +55,6 @@ SHALL mostrar un error si el servicio no logra establecerlo.
 - **WHEN** la actividad se recrea (rotación) con el túnel activo
 - **THEN** el interruptor se muestra activo sin reenviar la orden de arranque
 
-### Requirement: Aplicación de cambios de configuración
-Los cambios de parámetros hechos con los controles deslizantes SHALL aplicarse al túnel activo con
-debounce, como máximo unas pocas veces por segundo, y siempre con el valor final. El servicio SHALL ser
-la fuente de verdad de la configuración activa: la interfaz SHALL adoptarla al observar el túnel en
-marcha y nunca SHALL enviar al servicio una configuración que el usuario no haya cambiado.
-
-#### Scenario: Arrastre continuo de un slider
-- **WHEN** el usuario arrastra el slider de latencia durante 2 segundos
-- **THEN** el servicio recibe como máximo 10 actualizaciones y la última corresponde al valor en el que se soltó el slider
-
-#### Scenario: Reapertura de la app con el túnel activo
-- **GIVEN** el túnel está activo con 2000 kbps de bajada y 300 ms de latencia (perfil Personalizado)
-- **WHEN** la actividad se destruye y el usuario vuelve a abrir la app
-- **THEN** los controles muestran 2000 kbps y 300 ms y el servicio no recibe ninguna actualización de configuración
-
 ### Requirement: Diagnóstico de fallos de red
 El túnel SHALL registrar en el log del sistema, con una etiqueta común y frecuencia limitada, los
 fallos de conexión, de creación o protección de sockets, de los bucles y de establecimiento del túnel.
@@ -108,3 +93,33 @@ publicar un fallo cuyo motivo indique la revocación, no un error de E/S.
 - **GIVEN** el túnel está activo
 - **WHEN** otra app VPN se activa y el sistema invoca `onRevoke()`
 - **THEN** el estado publicado es `Failed` con un motivo de revocación y la UI no muestra "Error leyendo el descriptor del TUN"
+
+### Requirement: Aplicación de cambios de configuración al túnel activo
+Los cambios de parámetros hechos con los campos de texto o al elegir un perfil SHALL aplicarse al túnel
+activo con debounce, como máximo unas pocas veces por segundo, y siempre con el valor final. El servicio
+SHALL ser la fuente de verdad de la configuración activa: la interfaz SHALL adoptarla al observar el
+túnel en marcha y nunca SHALL enviar al servicio una configuración que el usuario no haya cambiado.
+
+#### Scenario: Escritura continua en un campo
+- **WHEN** el usuario escribe un valor de latencia carácter a carácter durante 2 segundos
+- **THEN** el servicio recibe como máximo 10 actualizaciones y la última corresponde al valor final escrito
+
+#### Scenario: Reapertura de la app con el túnel activo
+- **GIVEN** el túnel está activo con 2000 kbps de bajada y 300 ms de latencia (perfil Personalizado)
+- **WHEN** la actividad se destruye y el usuario vuelve a abrir la app
+- **THEN** los controles muestran 2000 kbps y 300 ms y el servicio no recibe ninguna actualización de configuración
+
+### Requirement: Tiempo activo del túnel
+El servicio SHALL publicar, junto con el estado activo, el instante de arranque del túnel medido con el
+reloj monotónico, y la interfaz SHALL calcular el tiempo activo a partir de él. Reconstruir el túnel por
+un cambio de red o aplicar una configuración nueva no SHALL reiniciarlo.
+
+#### Scenario: Reapertura de la app
+- **GIVEN** el túnel lleva 5 minutos activo
+- **WHEN** la actividad se destruye y el usuario vuelve a abrir la app
+- **THEN** el tiempo activo indica 05:00 y sigue contando
+
+#### Scenario: Cambio de perfil
+- **GIVEN** el túnel lleva 2 minutos activo
+- **WHEN** el usuario elige otro perfil
+- **THEN** el tiempo activo sigue contando desde 02:00

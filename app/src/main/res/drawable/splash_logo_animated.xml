@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Punto de partida de la animación de drawable-v31/splash_icon.xml: trazos sin dibujar y nodos ocultos. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="288dp"
+    android:height="288dp"
+    android:viewportWidth="288"
+    android:viewportHeight="288">
+
+    <!-- Logo de 100 × 100 escalado a 168 dp y centrado: cabe en el círculo de 192 dp del icono. -->
+    <group
+        android:translateX="60"
+        android:translateY="60"
+        android:scaleX="1.68"
+        android:scaleY="1.68">
+
+        <path
+            android:name="frame_top"
+            android:strokeWidth="7.5"
+            android:strokeColor="#0067C6"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round"
+            android:trimPathEnd="0"
+            android:pathData="M 16,42 L 16,30 A 14,14 0 0,1 30,16 L 70,16 A 14,14 0 0,1 84,30 L 84,42" />
+
+        <path
+            android:name="frame_bottom"
+            android:strokeWidth="7.5"
+            android:strokeColor="#0067C6"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round"
+            android:trimPathEnd="0"
+            android:pathData="M 84,58 L 84,70 A 14,14 0 0,1 70,84 L 30,84 A 14,14 0 0,1 16,70 L 16,58" />
+
+        <path
+            android:name="pulse"
+            android:strokeWidth="7"
+            android:strokeColor="#00C4FF"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round"
+            android:trimPathEnd="0"
+            android:pathData="M 12,50 L 28,54 L 41,25 L 54,77 L 66,33 L 75,50 L 88,50" />
+
+        <group
+            android:name="dot_left"
+            android:pivotX="12"
+            android:pivotY="50"
+            android:scaleX="0"
+            android:scaleY="0">
+            <path
+                android:fillColor="#67E8F9"
+                android:pathData="M 12,50 m -5.5,0 a 5.5,5.5 0 1,1 11,0 a 5.5,5.5 0 1,1 -11,0" />
+        </group>
+
+        <group
+            android:name="dot_right"
+            android:pivotX="88"
+            android:pivotY="50"
+            android:scaleX="0"
+            android:scaleY="0">
+            <path
+                android:fillColor="#67E8F9"
+                android:pathData="M 88,50 m -5.5,0 a 5.5,5.5 0 1,1 11,0 a 5.5,5.5 0 1,1 -11,0" />
+        </group>
+    </group>
+</vector>

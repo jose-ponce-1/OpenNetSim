@@ -68,6 +68,7 @@ dependencies {
     androidTestImplementation(composeBom)
 
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
@@ -101,9 +102,12 @@ kover {
                 // JVM no lo alcanzan y se verifica en dispositivo (openspec/config.yaml).
                 classes(
                     "com.opennetsim.ui.MainActivity*",
-                    "com.opennetsim.ui.ThrottleDashboardScreenKt*",
                     "com.opennetsim.ui.ComposableSingletons*",
+                    "com.opennetsim.ui.screens.*",
+                    "com.opennetsim.ui.components.*",
                     "com.opennetsim.ui.theme.*",
+                    "com.opennetsim.ui.preferences.SharedPreferencesUiPreferences*",
+                    "com.opennetsim.profiles.SharedPreferencesProfileStore*",
                     "com.opennetsim.service.ThrottleVpnService*",
                     "com.opennetsim.service.ServiceTunnelController*",
                     "com.opennetsim.service.SharedPreferencesConfigStore*",

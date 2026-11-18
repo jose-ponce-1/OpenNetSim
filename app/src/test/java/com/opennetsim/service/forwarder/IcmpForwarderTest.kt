@@ -157,8 +157,11 @@ class IcmpForwarderTest {
         forwarder.processOutboundIpv4(
             echoRequestV4(identifier = 6, sequence = 1, destination = byteArrayOf(8, 8, 8, 8))
         )
-        awaitCondition("cierre de la sesión inactiva") { transport.closedSockets.get() == 1 }
-        assertEquals(1, forwarder.activeSessionCount())
+        // La limpieza va al final de una vuelta del bucle y la sesión del ping nuevo se abre al principio de
+        // la siguiente: el cierre se ve antes que la apertura, así que se esperan las dos cosas.
+        awaitCondition("cierre de la sesión inactiva y apertura de la nueva") {
+            transport.closedSockets.get() == 1 && forwarder.activeSessionCount() == 1
+        }
     }
 
     @Test
