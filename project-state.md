@@ -143,7 +143,7 @@ Prototipo del usuario en Claude Design: «OpenNetSim · Prototipo Android M3» (
 - [x] Ajustes pedidos tras esa prueba: un campo vacío de Parámetros equivale a 0 (donde 0 está fuera de rango, error de rango y se mantiene el último valor válido) y firma «Hecho con ♥ por Jose Ponce» en «Acerca de». 242 tests y puerta de calidad completa en verde; revisado en el emulador.
 - [x] Código abierto y donaciones en «Acerca de» (decisión del usuario, 18/11/2026: distribución en GitHub y Google Play, donaciones con Ko-fi): apartado «Código abierto» con «Ver el código en GitHub» y apartado «Apoya el proyecto» con «Apoyar en Ko-fi», que no aparece si la app la instaló Google Play (su política de pagos no permite enlazar a otro medio de pago). 245 tests y puerta de calidad en verde; revisado en el emulador.
 - [x] Ko-fi del autor (`https://ko-fi.com/joseponce`) en la app, en `.github/FUNDING.yml` (botón «Sponsor» del repositorio) y en el README.
-- [ ] Prueba del usuario en su teléfono, CI del PR y archivar el cambio.
+- [x] Prueba del usuario en su teléfono (18/11/2026: el enlace a Ko-fi funciona), CI en verde (PR #16) y cambio archivado en `openspec/changes/archive/2026-11-18-redesign-material3-ui`; specs nuevas `app-navigation`, `connection-profiles`, `live-telemetry` y `parameter-editing`.
 
 ---
 
@@ -154,8 +154,9 @@ Prototipo del usuario en Claude Design: «OpenNetSim · Prototipo Android M3» (
 4. ~~Preparar la release~~ (Fase 12).
 5. ~~Rendimiento y deuda~~ (Fase 13): microbenchmark y optimización del camino de cada paquete, baselines de detekt y cobertura con Kover.
    - Test de velocidad de Google cancelado y repetido enseguida (observado por el usuario el 17/11/2026 con la release): mide menos de lo configurado; si se deja terminar, el siguiente es normal. Causa medida: los sockets TCP exteriores acumulaban varios MB sin leer en el kernel (hasta 6,9 MB por conexión), que se seguían entregando por el límite. Resuelto en el cambio `clamp-outer-receive-window` (PR #11, archivado): `SO_RCVBUF` y `TCP_WINDOW_CLAMP` proporcionales a la red simulada, ajustables en caliente. Verificado por el usuario con el test oficial de M-Lab recargado 5–6 veces a mitad de prueba, sin pérdida; el de Google no se pudo repetir (IP bloqueada temporalmente).
-6. Nueva interfaz (Fase 14, verificada en dispositivo; falta el PR): campos de valor exacto, paleta oficial del prototipo del usuario y pantalla de carga con el logo.
-7. Mejoras opcionales anotadas por el usuario (18/11/2026):
+6. ~~Nueva interfaz~~ (Fase 14, PR #16).
+7. Primera versión oficial: llevar `develop` a `main`, etiqueta `v1.0.0` y release de GitHub con `app-release.apk` firmado (keystore del usuario). Después, README más visual (capturas de la app y animación del logo) sin perder la información técnica.
+8. Mejoras opcionales anotadas por el usuario (18/11/2026):
    - El aviso «Desliza para ver n perfiles más» y la animación de los chips reaparecen al volver a Simular desde otra sección. Causa: su estado vive en el composable de Simular (`ProfileChips.kt`, `remember`/`rememberSaveable`) y se pierde al salir de la composición. Arreglo posible: guardarlo en el ViewModel o en `UiPreferences` (mostrarlo solo las primeras veces). No le molesta por ahora.
    - Pantalla «Licencias de código abierto» con las librerías incluidas (como AntennaPod; la licencia Apache de AndroidX y Kotlin pide entregar su texto al redistribuirlas). Recomendada, no pedida aún.
    - Ojo con Google Play: la versión de Play enlaza al repositorio, cuya página y README enlazan a Ko-fi; un revisor podría considerarlo un camino indirecto al pago.
@@ -164,7 +165,7 @@ Prototipo del usuario en Claude Design: «OpenNetSim · Prototipo Android M3» (
 ---
 
 ## Punto de Retorno (Checkpoint)
-- **Últimos archivos modificados:** `ui/` reescrita (pantallas en `ui/screens/`), `profiles/`, recursos de la pantalla de carga, `TunnelState`, `ThrottleVpnService` (instante de arranque) y el cambio `openspec/changes/redesign-material3-ui`.
-- **Estado General:** Fases 1–11 en `develop` y `main`; Fases 12 y 13 en `develop` (PR #10–#14), pendientes de llevar a `main`; Fase 14 en la rama `feat/new-ui` (commit `37c1aec` en GitHub, sin PR); las correcciones y ajustes del 18/11/2026 (barras del sistema tras la pantalla de carga, test ICMP, campo vacío = 0 y firma en «Acerca de»), sin commit.
+- **Últimos archivos modificados:** `ui/` reescrita (pantallas en `ui/screens/`, `AboutDialog.kt`, `SupportLinks.kt`), `profiles/`, recursos de la pantalla de carga, `TunnelState`, `ThrottleVpnService` (instante de arranque), `.github/FUNDING.yml`, README y specs de `openspec/specs/`.
+- **Estado General:** Fases 1–11 en `develop` y `main`; Fases 12–14 en `develop` (PR #10–#14 y #16), pendientes de llevar a `main` (PR de `develop` a `main` abierto el 18/11/2026).
 - **Artefacto de Distribución:** APK de depuración en `app/build/outputs/apk/debug/app-debug.apk`; release firmada en `app/build/outputs/apk/release/app-release.apk` (keystore del usuario, fuera del repositorio).
-- **Siguiente acción inmediata:** el usuario prueba `app-debug.apk` en su teléfono (código abierto y donaciones, campo vacío = 0); cuando lo indique, commit, PR hacia `develop`, CI y archivar `redesign-material3-ui`. Cuando el usuario lo pida, llevar `develop` a `main`.
+- **Siguiente acción inmediata:** merge del PR de `develop` a `main`; después, etiqueta `v1.0.0` y release de GitHub con el APK firmado, y README visual (hoja de ruta, punto 8).

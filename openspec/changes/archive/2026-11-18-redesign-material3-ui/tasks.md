@@ -48,7 +48,7 @@
 - [x] 8.1 `SupportLinks` (URL del repositorio, URL de Ko-fi y `donationLinkAllowed` según el instalador); verificar con `SupportLinksTest`
 - [x] 8.2 Diálogo «Acerca de» en `ui/screens/AboutDialog.kt`: apartados «Código abierto» y «Apoya el proyecto» (este, oculto si instaló Google Play), firma y contenido desplazable; verificar con `detekt` y en el emulador (instalado con adb y con instalador `com.android.vending`, claro y oscuro, pantalla de 360 × 640 dp) — revisado en el emulador con API 37: con adb y con `com.google.android.packageinstaller` aparecen ambos apartados; con `com.android.vending` solo el de código abierto; «Ver el código en GitHub» abre Chrome; desplazable en 360 × 640 dp en oscuro. Puerta de calidad completa en verde (245 tests, 1 omitido en Windows)
 - [x] 8.3 URL definitiva de Ko-fi (`https://ko-fi.com/joseponce`) en `SupportLinks.KO_FI_URL`, `.github/FUNDING.yml` y la sección «Support» del README; verificar con `SupportLinksTest` y abriendo el enlace desde la app
-- [ ] 8.4 Verificación del usuario en su teléfono con `app-debug.apk`
+- [x] 8.4 Verificación del usuario en su teléfono con `app-debug.apk` — usuario, 18/11/2026: probado, el enlace a Ko-fi funciona
 
 ## Workflow follow-up
 
