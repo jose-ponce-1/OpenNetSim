@@ -166,7 +166,7 @@ OpenNetSim/
 
 ## 🛠️ Requirements & build
 
-- **Android SDK:** min SDK 26 (Android 8.0), target and compile SDK 35 (Android 15)
+- **Android SDK:** min SDK 26 (Android 8.0), target SDK 36 (Android 16), compile SDK 37.1
 - **Language:** Kotlin 2.4 (built-in Kotlin of Android Gradle Plugin 9), Jetpack Compose with Material 3
 - **Build system:** Gradle (Kotlin DSL) with a version catalog (`gradle/libs.versions.toml`)
 - **JDK:** 17

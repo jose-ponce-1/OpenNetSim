@@ -22,7 +22,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -37,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import com.opennetsim.R
 import com.opennetsim.ui.SupportLinks
+import com.opennetsim.ui.components.AppOutlinedButton
 import com.opennetsim.ui.components.BrandLogo
 
 /**
@@ -71,7 +71,7 @@ internal fun AboutDialog(onDismiss: () -> Unit) {
                     title = stringResource(R.string.about_open_source_title),
                     text = stringResource(R.string.about_open_source_text)
                 ) {
-                    OutlinedButton(onClick = { openLink(context, SupportLinks.SOURCE_CODE_URL) }) {
+                    AppOutlinedButton(onClick = { openLink(context, SupportLinks.SOURCE_CODE_URL) }) {
                         ButtonIcon(Icons.Outlined.Code)
                         Text(stringResource(R.string.about_view_source))
                     }
