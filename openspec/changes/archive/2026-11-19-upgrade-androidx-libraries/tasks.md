@@ -27,7 +27,7 @@
 ## 6. Puerta de calidad e integración
 - [x] 6.1 Ejecutar la puerta de calidad completa (`:core:compileKotlin :app:compileDebugKotlin`, `detekt`, `lintDebug`, `:core:test :app:testDebugUnitTest`, Kover de `:core` y `:app`, `:benchmark:smokeBenchmark`, `:app:assembleRelease`); verificar que todo termina bien, que la cobertura sigue en el 85 % o más y anotar el tamaño de la release (antes 1,28 MB)
 - [x] 6.2 Actualizar `project-state.md` (fase nueva, paso 3 de la hoja de ruta y checkpoint) y el README si cita versiones; verificar que no queda ninguna versión antigua citada con `grep -rn "2024.10.01\|compileSdk = 35\|targetSdk = 35"`
-- [ ] 6.3 Abrir el PR hacia `develop`; verificar que la CI de GitHub Actions termina en verde (si falla por falta de la plataforma 37, añadir el paso de `sdkmanager` de D6)
+- [x] 6.3 Abrir el PR hacia `develop`; verificar que la CI de GitHub Actions termina en verde (si falla por falta de la plataforma 37, añadir el paso de `sdkmanager` de D6)
 - [x] 6.4 Verificación del usuario en su teléfono con la release firmada; verificar que confirma que el túnel, la interfaz, el «atrás» y la pantalla de carga funcionan como en la 1.0.1
 
 ## Workflow follow-up
