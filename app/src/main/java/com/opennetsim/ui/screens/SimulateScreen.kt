@@ -32,7 +32,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -53,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import com.opennetsim.R
 import com.opennetsim.ui.MainUiState
 import com.opennetsim.ui.UiFormatters
+import com.opennetsim.ui.components.AppOutlinedButton
 import com.opennetsim.ui.components.IconBadge
 import com.opennetsim.ui.components.SectionTitle
 import com.opennetsim.ui.components.StatTile
@@ -263,7 +263,7 @@ private fun AppliedConditions(
 @Composable
 private fun ConditionActions(onAdjust: () -> Unit, onSave: () -> Unit) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedButton(onClick = onAdjust, modifier = Modifier.weight(1f)) {
+        AppOutlinedButton(onClick = onAdjust, modifier = Modifier.weight(1f)) {
             Icon(Icons.Outlined.Tune, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
             Text(
                 stringResource(R.string.action_adjust),
