@@ -11,12 +11,14 @@ val releaseStoreFile = providers.gradleProperty("openNetSimReleaseStoreFile").or
 
 android {
     namespace = "com.opennetsim"
-    compileSdk = 35
+    compileSdk {
+        version = release(37) { minorApiLevel = 1 }
+    }
 
     defaultConfig {
         applicationId = "com.opennetsim"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 2
         versionName = "1.0.1"
 

@@ -157,18 +157,31 @@ Petición del usuario (18/11/2026): añadir el inglés para la 1.0.1.
 - [x] `versionCode` 2, `versionName` 1.0.1; README actualizado.
 - [x] Revisado en el emulador con API 37 (360 × 640 dp) en inglés y en español, incluido el cambio de idioma con la simulación activa (notificación y canal traducidos, túnel intacto), `es-MX`, `fr-FR` y el selector de idioma de la app en los ajustes del sistema.
 - [x] Verificación del usuario en su teléfono (18/11/2026) y cambio archivado en `openspec/changes/archive/2026-11-18-add-english-localization`; spec nueva `app-localization`.
-- [ ] Release `v1.0.1` en GitHub.
+- [x] Release `v1.0.1` en GitHub (18/11/2026, «OpenNetSim 1.0.1», etiqueta `v1.0.1` sobre `f92c485`).
+
+### Fase 16: Librerías al día y `targetSdk` 36 (cambio OpenSpec `upgrade-androidx-libraries`, rama `chore/upgrade-libraries`)
+Petición del usuario (19/11/2026): actualizar Compose, AndroidX y corrutinas, y el `targetSdk` mínimo de Google Play (36 para apps nuevas y actualizaciones desde el 31/08/2026).
+- [x] Compose BOM 2024.10.01 → 2026.11.01 (`ui` 1.13.0, `material3` 1.5.0), `core-ktx` 1.19.1, `lifecycle` 2.11.1, `activity-compose` 1.13.0, `core-splashscreen` 1.2.0 y corrutinas 1.11.0.
+- [x] `compileSdk` 35 → 37.1 (`foundation` y `animation` 1.13.0 piden la versión menor 1; DSL `release(37) { minorApiLevel = 1 }`, plataforma instalada por AGP) y `targetSdk` 35 → 36.
+- [x] API obsoletas migradas: `rememberBottomSheetState` en la hoja de perfiles y `LocalResources` en `UiText.asString()` (aviso de lint nuevo de Compose 1.13).
+- [x] Aspecto de la 1.0.1 conservado (decisión del usuario): `AppOutlinedButton` y colores fijos en la barra inferior, que Material 3 1.5 cambiaba por defecto. Diferencias aceptadas: indicador de la barra algo más estrecho y la hoja de perfiles unos 35 px más arriba.
+- [x] Revisado en el emulador con API 37 contra capturas de la 1.0.1 (claro y oscuro): bienvenida, Simular, Parámetros, Telemetría, perfiles, «Acerca de», edge-to-edge, «atrás» predictivo, cambio de idioma en caliente, túnel (ping +200 ms, cambio a «2G / EDGE» en caliente, notificación `specialUse`, configuración restaurada tras forzar el cierre).
+- [x] Puerta de calidad completa en verde: 250 tests (1 omitido en Windows), cobertura 90,4 %, detekt, `lintDebug` sin avisos nuevos, benchmark y `assembleRelease` (1,51 MB; antes 1,28 MB).
+- [ ] CI de GitHub Actions en verde (PR hacia `develop`).
+- [x] Verificación del usuario en su teléfono con la release firmada (19/11/2026: funciona correctamente).
+- [ ] Cambio archivado.
 
 ## Hoja de Ruta
 1. ~~Fidelidad de la simulación~~ (Fase 9).
 2. ~~Módulo `:core` y version catalog~~ (Fase 10).
-3. ~~Actualizar AGP, Kotlin y Gradle~~ (Fase 11). Queda un aviso de Gradle 10 que viene del plugin de detekt 1.23.8: se resuelve con detekt 2.0 cuando sea estable. Pendiente aparte: Compose BOM, AndroidX y corrutinas.
+3. ~~Actualizar AGP, Kotlin y Gradle~~ (Fase 11). Queda un aviso de Gradle 10 que viene del plugin de detekt 1.23.8: se resuelve con detekt 2.0 cuando sea estable. Compose BOM, AndroidX y corrutinas al día en la Fase 16, con `targetSdk` 36.
 4. ~~Preparar la release~~ (Fase 12).
 5. ~~Rendimiento y deuda~~ (Fase 13): microbenchmark y optimización del camino de cada paquete, baselines de detekt y cobertura con Kover.
    - Test de velocidad de Google cancelado y repetido enseguida (observado por el usuario el 17/11/2026 con la release): mide menos de lo configurado; si se deja terminar, el siguiente es normal. Causa medida: los sockets TCP exteriores acumulaban varios MB sin leer en el kernel (hasta 6,9 MB por conexión), que se seguían entregando por el límite. Resuelto en el cambio `clamp-outer-receive-window` (PR #11, archivado): `SO_RCVBUF` y `TCP_WINDOW_CLAMP` proporcionales a la red simulada, ajustables en caliente. Verificado por el usuario con el test oficial de M-Lab recargado 5–6 veces a mitad de prueba, sin pérdida; el de Google no se pudo repetir (IP bloqueada temporalmente).
 6. ~~Nueva interfaz~~ (Fase 14, PR #16).
 7. ~~Primera versión oficial~~ (18/11/2026): PR #17 en `main`, etiqueta `v1.0.0` y [release de GitHub](https://github.com/jose-ponce-1/OpenNetSim/releases/tag/v1.0.0) con `OpenNetSim-1.0.0.apk` firmado (esquema v2, RSA 4096; SHA-256 del APK `25ed88b2…a17a85`). Aviso «tal cual, sin garantías» en «Acerca de», README y notas de la release. README visual (logo animado en SVG, capturas en claro y oscuro, perfiles, cómo funciona) en la rama `docs/visual-readme`.
 8. Mejoras opcionales anotadas por el usuario (18/11/2026):
+   - `targetSdk` 37: Google Play lo pedirá previsiblemente en agosto de 2027 (cambios de comportamiento de Android 17).
    - El aviso «Desliza para ver n perfiles más» y la animación de los chips reaparecen al volver a Simular desde otra sección. Causa: su estado vive en el composable de Simular (`ProfileChips.kt`, `remember`/`rememberSaveable`) y se pierde al salir de la composición. Arreglo posible: guardarlo en el ViewModel o en `UiPreferences` (mostrarlo solo las primeras veces). No le molesta por ahora.
    - Pantalla «Licencias de código abierto» con las librerías incluidas (como AntennaPod; la licencia Apache de AndroidX y Kotlin pide entregar su texto al redistribuirlas). Recomendada, no pedida aún.
    - Ojo con Google Play: la versión de Play enlaza al repositorio, cuya página y README enlazan a Ko-fi; un revisor podría considerarlo un camino indirecto al pago.
@@ -177,7 +190,7 @@ Petición del usuario (18/11/2026): añadir el inglés para la 1.0.1.
 ---
 
 ## Punto de Retorno (Checkpoint)
-- **Últimos archivos modificados:** `ui/` reescrita (pantallas en `ui/screens/`, `AboutDialog.kt`, `SupportLinks.kt`), `profiles/`, recursos de la pantalla de carga, `TunnelState`, `ThrottleVpnService` (instante de arranque), `.github/FUNDING.yml`, README y specs de `openspec/specs/`.
-- **Estado General:** Fases 1–15 en `develop` y `main` (la 15, inglés para la 1.0.1, fusionada el 18/11/2026); versión 1.0.0 publicada en GitHub (etiqueta `v1.0.0` sobre `4017c41`); la 1.0.1 está en `main` sin publicar.
-- **Artefacto de Distribución:** release 1.0.0 en GitHub (`OpenNetSim-1.0.0.apk`); localmente, `app/build/outputs/apk/release/app-release.apk` (firmada con el keystore del usuario, configurado en `~/.gradle/gradle.properties`) y `app/build/outputs/apk/debug/app-debug.apk`.
-- **Siguiente acción inmediata:** etiqueta `v1.0.1` sobre `main` y release de GitHub con el APK firmado, cuando el usuario lo pida. Para versiones siguientes: subir `versionCode`/`versionName`, etiqueta `vX.Y.Z` y release con el mismo keystore.
+- **Últimos archivos modificados:** `gradle/libs.versions.toml`, `app/build.gradle.kts` (`compileSdk` 37.1, `targetSdk` 36), `ui/components/Components.kt` (`AppOutlinedButton`), `UiTextResources.kt`, `ProfileDialogs.kt`, `MainScaffold.kt`, `SimulateScreen.kt`, `AboutDialog.kt` y README.
+- **Estado General:** Fases 1–15 en `develop` y `main`; versiones 1.0.0 y 1.0.1 publicadas en GitHub (etiquetas `v1.0.0` y `v1.0.1`). Fase 16 (librerías y `targetSdk` 36) en la rama `chore/upgrade-libraries`, verificada por el usuario en su teléfono y pendiente de CI.
+- **Artefacto de Distribución:** releases 1.0.0 y 1.0.1 en GitHub; localmente, `app/build/outputs/apk/release/app-release.apk` (firmada con el keystore del usuario, configurado en `~/.gradle/gradle.properties`) y `app/build/outputs/apk/debug/app-debug.apk`.
+- **Siguiente acción inmediata:** PR de `chore/upgrade-libraries` hacia `develop`, CI en verde y, después, archivar `upgrade-androidx-libraries`. Para versiones siguientes: subir `versionCode`/`versionName`, etiqueta `vX.Y.Z` y release con el mismo keystore.
