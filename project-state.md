@@ -170,6 +170,8 @@ Petición del usuario (19/11/2026): actualizar Compose, AndroidX y corrutinas, y
 - [x] CI de GitHub Actions en verde (PR #23). Un primer intento falló en `ThrottlingEngineTest.testJitterUnderLoadKeepsOrderAndIsNotBiasedUpwards` (`:core`, que este cambio no toca): el jitter usa `Random` sin semilla y la media de 5 s a veces se sale de 200 ± 10 ms. Pasó al relanzarlo (15 de 15 en local). Corregido con el commit `681cc02` (integrado en `develop` tras el PR #23): el test usa una `LatencyQueue` con jitter de semilla fija (solo cambia el test).
 - [x] Verificación del usuario en su teléfono con la release firmada (19/11/2026: funciona correctamente).
 - [x] Cambio archivado en `openspec/changes/archive/2026-11-19-upgrade-androidx-libraries`.
+- [x] Integración final en `develop` (PR #23 y PR #25 con `681cc02`) y subida de versión para la release `1.0.2` (`versionCode` 3, `versionName` `1.0.2`).
+- [ ] Release `v1.0.2` en GitHub.
 
 ## Hoja de Ruta
 1. ~~Fidelidad de la simulación~~ (Fase 9).
@@ -190,7 +192,7 @@ Petición del usuario (19/11/2026): actualizar Compose, AndroidX y corrutinas, y
 ---
 
 ## Punto de Retorno (Checkpoint)
-- **Últimos archivos modificados:** `gradle/libs.versions.toml`, `app/build.gradle.kts` (`compileSdk` 37.1, `targetSdk` 36), `ui/components/Components.kt` (`AppOutlinedButton`), `UiTextResources.kt`, `ProfileDialogs.kt`, `MainScaffold.kt`, `SimulateScreen.kt`, `AboutDialog.kt`, `README.md`, `ThrottlingEngineTest.kt` y `project-state.md`.
-- **Estado General:** Fases 1–15 en `develop` y `main`; versiones 1.0.0 y 1.0.1 publicadas en GitHub (etiquetas `v1.0.0` y `v1.0.1`). Fase 16 (librerías y `targetSdk` 36) integrada en `develop` (PR #23 y corrección del test determinista de jitter); pendiente preparar la release `1.0.2` (`versionCode` 3) y llevar `develop` a `main` (PR #24).
+- **Últimos archivos modificados:** `gradle/libs.versions.toml`, `app/build.gradle.kts` (`compileSdk` 37.1, `targetSdk` 36, `versionCode` 3, `versionName` `1.0.2`), `ui/components/Components.kt` (`AppOutlinedButton`), `UiTextResources.kt`, `ProfileDialogs.kt`, `MainScaffold.kt`, `SimulateScreen.kt`, `AboutDialog.kt`, `README.md`, `ThrottlingEngineTest.kt` y `project-state.md`.
+- **Estado General:** Fases 1–15 en `develop` y `main`; versiones 1.0.0 y 1.0.1 publicadas en GitHub (etiquetas `v1.0.0` y `v1.0.1`). Fase 16 (librerías y `targetSdk` 36) integrada en `develop` (PR #23 y PR #25) y versión `1.0.2` (`versionCode` 3) preparada para llevar a `main` mediante el PR #24.
 - **Artefacto de Distribución:** releases 1.0.0 y 1.0.1 en GitHub; localmente, `app/build/outputs/apk/release/app-release.apk` (firmada con el keystore del usuario, configurado en `~/.gradle/gradle.properties`) y `app/build/outputs/apk/debug/app-debug.apk`.
-- **Siguiente acción inmediata:** preparar la release `1.0.2` (`versionCode` 3) en `develop`, actualizar el PR #24 (`develop` → `main`), compilar el APK firmado y publicar la etiqueta y release `v1.0.2`.
+- **Siguiente acción inmediata:** fusionar el PR #24 (`develop` → `main`), compilar el APK firmado `OpenNetSim-1.0.2.apk`, crear la etiqueta `v1.0.2` sobre `main` y publicar la release en GitHub.
