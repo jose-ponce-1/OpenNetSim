@@ -408,10 +408,25 @@ class ThrottlingEngineTest {
 
     @Test
     fun testJitterUnderLoadKeepsOrderAndIsNotBiasedUpwards() {
-        // 200 ms ± 50 ms con un paquete por ms durante 5 s y ancho de banda holgado.
-        val engine = ThrottlingEngine.createPipeline(
-            ImpairmentParams(rateKbps = 1_000_000, latencyMs = 200, jitterMs = 50),
-            MonotonicClock.ofMillis { simulatedTimeMs }
+        // 200 ms ± 50 ms con un paquete por ms durante 5 s y ancho de banda holgado. Igual que
+        // createPipeline, pero con el jitter de una semilla fija: la media de 5 s de un proceso por
+        // tramos tiene pocas muestras independientes y, con Random sin semilla, a veces se salía
+        // de 200 ± 10 ms (fallo intermitente en la CI).
+        val clock = MonotonicClock.ofMillis { simulatedTimeMs }
+        val seeded = kotlin.random.Random(JITTER_SEED)
+        val engine = ThrottlingEngine(
+            bandwidthLimiter = TokenBucketLimiter(
+                bytesPerSecond = ThrottlingEngine.kbpsToBytesPerSecond(1_000_000),
+                clock = clock
+            ),
+            latencyQueue = LatencyQueue(
+                baseLatencyMs = 200L,
+                jitterMs = 50L,
+                clock = clock,
+                jitterRandom = { min, max -> if (min == max) min else seeded.nextLong(min, max + 1) }
+            ),
+            packetLossSimulator = PacketLossSimulator(),
+            clock = clock
         )
         val start = simulatedTimeMs
         val arrivals = HashMap<Int, Long>()
@@ -481,5 +496,10 @@ class ThrottlingEngineTest {
         assertEquals(0.03, engine.uplinkEngine.packetLossSimulator.lossProbability, 1e-6)
         assertEquals(0.12, engine.downlinkEngine.packetLossSimulator.lossProbability, 1e-6)
         assertEquals(4, engine.downlinkEngine.packetLossSimulator.burstLength)
+    }
+
+    private companion object {
+        /** Semilla del jitter en el test de sesgo bajo carga: resultado reproducible. */
+        const val JITTER_SEED = 42L
     }
 }

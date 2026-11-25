@@ -21,6 +21,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
@@ -144,13 +145,23 @@ private fun AppTopBar(destination: AppDestination, state: MainUiState, onAbout: 
 
 @Composable
 private fun AppNavigationBar(destination: AppDestination, onSelect: (AppDestination) -> Unit) {
+    // Colores del prototipo: Material 3 1.4+ pasó la etiqueta elegida de `onSurface` a `secondary`.
+    val colors = MaterialTheme.colorScheme
+    val itemColors = NavigationBarItemDefaults.colors(
+        selectedIconColor = colors.onSecondaryContainer,
+        selectedTextColor = colors.onSurface,
+        indicatorColor = colors.secondaryContainer,
+        unselectedIconColor = colors.onSurfaceVariant,
+        unselectedTextColor = colors.onSurfaceVariant
+    )
     NavigationBar {
         AppDestination.entries.forEach { item ->
             NavigationBarItem(
                 selected = item == destination,
                 onClick = { onSelect(item) },
                 icon = { Icon(item.icon, contentDescription = null) },
-                label = { Text(stringResource(item.labelRes)) }
+                label = { Text(stringResource(item.labelRes)) },
+                colors = itemColors
             )
         }
     }
