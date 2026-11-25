@@ -171,7 +171,7 @@ Petición del usuario (19/11/2026): actualizar Compose, AndroidX y corrutinas, y
 - [x] Verificación del usuario en su teléfono con la release firmada (19/11/2026: funciona correctamente).
 - [x] Cambio archivado en `openspec/changes/archive/2026-11-19-upgrade-androidx-libraries`.
 - [x] Integración final en `develop` (PR #23 y PR #25 con `681cc02`) y subida de versión para la release `1.0.2` (`versionCode` 3, `versionName` `1.0.2`).
-- [ ] Release `v1.0.2` en GitHub.
+- [x] Release `v1.0.2` en GitHub (25/11/2026, «OpenNetSim 1.0.2», etiqueta `v1.0.2` sobre `c1acc17`, `OpenNetSim-1.0.2.apk` con SHA-256 `be6d76a7…2323ce1`).
 
 ## Hoja de Ruta
 1. ~~Fidelidad de la simulación~~ (Fase 9).
@@ -193,6 +193,6 @@ Petición del usuario (19/11/2026): actualizar Compose, AndroidX y corrutinas, y
 
 ## Punto de Retorno (Checkpoint)
 - **Últimos archivos modificados:** `gradle/libs.versions.toml`, `app/build.gradle.kts` (`compileSdk` 37.1, `targetSdk` 36, `versionCode` 3, `versionName` `1.0.2`), `ui/components/Components.kt` (`AppOutlinedButton`), `UiTextResources.kt`, `ProfileDialogs.kt`, `MainScaffold.kt`, `SimulateScreen.kt`, `AboutDialog.kt`, `README.md`, `ThrottlingEngineTest.kt` y `project-state.md`.
-- **Estado General:** Fases 1–15 en `develop` y `main`; versiones 1.0.0 y 1.0.1 publicadas en GitHub (etiquetas `v1.0.0` y `v1.0.1`). Fase 16 (librerías y `targetSdk` 36) integrada en `develop` (PR #23 y PR #25) y versión `1.0.2` (`versionCode` 3) preparada para llevar a `main` mediante el PR #24.
-- **Artefacto de Distribución:** releases 1.0.0 y 1.0.1 en GitHub; localmente, `app/build/outputs/apk/release/app-release.apk` (firmada con el keystore del usuario, configurado en `~/.gradle/gradle.properties`) y `app/build/outputs/apk/debug/app-debug.apk`.
-- **Siguiente acción inmediata:** fusionar el PR #24 (`develop` → `main`), compilar el APK firmado `OpenNetSim-1.0.2.apk`, crear la etiqueta `v1.0.2` sobre `main` y publicar la release en GitHub.
+- **Estado General:** Fases 1–16 en `develop` y `main`; versiones 1.0.0, 1.0.1 y 1.0.2 publicadas en GitHub (etiquetas `v1.0.0`, `v1.0.1` y `v1.0.2`).
+- **Artefacto de Distribución:** releases 1.0.0, 1.0.1 y 1.0.2 en GitHub (`OpenNetSim-1.0.2.apk`, SHA-256 `be6d76a71bfd04c86727ff0053fd37c713e648563351494b3a2d70d362323ce1`); localmente, `app/build/outputs/apk/release/app-release.apk` / `OpenNetSim-1.0.2.apk` (firmada con el keystore del usuario, configurado en `~/.gradle/gradle.properties`) y `app/build/outputs/apk/debug/app-debug.apk`.
+- **Siguiente acción inmediata:** continuar con las mejoras opcionales de la hoja de ruta (punto 8) o la publicación en Google Play (`bundleRelease`). Para versiones siguientes: subir `versionCode`/`versionName`, llevar `develop` a `main`, etiqueta `vX.Y.Z` y release con el mismo keystore.
