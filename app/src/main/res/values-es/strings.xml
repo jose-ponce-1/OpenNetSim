@@ -31,12 +31,28 @@
     <string name="about_open_source_title">Código abierto</string>
     <string name="about_open_source_text">OpenNetSim es de código abierto, con licencia Apache 2.0: puedes usarlo, estudiarlo, modificarlo y compartirlo libremente. Se ofrece tal cual, sin garantías de ningún tipo.</string>
     <string name="about_view_source">Ver el código en GitHub</string>
+    <string name="about_view_licenses">Licencias de código abierto</string>
     <string name="about_support_title">Apoya el proyecto</string>
     <string name="about_support_text">OpenNetSim es gratis y sin anuncios. Si te resulta útil, puedes apoyar su desarrollo con un donativo.</string>
     <string name="about_support_button">Apoyar en Ko-fi</string>
     <string name="about_made_with">Hecho con</string>
     <string name="about_made_by">por Jose Ponce</string>
     <string name="about_love">amor</string>
+
+    <!-- Licencias de código abierto -->
+    <string name="licenses_title">Licencias de código abierto</string>
+    <string name="licenses_summary_title">Software de terceros</string>
+    <string name="licenses_summary_body">OpenNetSim incluye %1$d artefactos de código abierto agrupados en %2$d familias. Todos pueden consultarse sin conexión.</string>
+    <string name="licenses_read_apache">Leer licencia Apache 2.0</string>
+    <plurals name="licenses_modules">
+        <item quantity="one">%d módulo</item>
+        <item quantity="many">%d módulos</item>
+        <item quantity="other">%d módulos</item>
+    </plurals>
+    <string name="licenses_expand">Mostrar módulos</string>
+    <string name="licenses_collapse">Ocultar módulos</string>
+    <string name="licenses_text_unavailable">El texto completo de la licencia %1$s no está incluido en la aplicación.</string>
+    <string name="licenses_load_error">No se pudo cargar la lista de licencias de código abierto.</string>
 
     <!-- Bienvenida -->
     <string name="welcome_title">Pon a prueba tu app en redes difíciles</string>
