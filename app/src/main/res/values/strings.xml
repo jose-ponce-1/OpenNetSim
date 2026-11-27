@@ -49,12 +49,27 @@
     <string name="about_open_source_title">Open source</string>
     <string name="about_open_source_text">OpenNetSim is open source under the Apache 2.0 license: you can use, study, modify and share it freely. It is provided as is, without warranty of any kind.</string>
     <string name="about_view_source">View the code on GitHub</string>
+    <string name="about_view_licenses">Open source licenses</string>
     <string name="about_support_title">Support the project</string>
     <string name="about_support_text">OpenNetSim is free and ad-free. If you find it useful, you can support its development with a donation.</string>
     <string name="about_support_button">Support on Ko-fi</string>
     <string name="about_made_with">Made with</string>
     <string name="about_made_by">by Jose Ponce</string>
     <string name="about_love">love</string>
+
+    <!-- Open source licenses -->
+    <string name="licenses_title">Open source licenses</string>
+    <string name="licenses_summary_title">Third-party software</string>
+    <string name="licenses_summary_body">OpenNetSim bundles %1$d open source artifacts across %2$d library groups. All notices can be read offline.</string>
+    <string name="licenses_read_apache">Read Apache 2.0 license</string>
+    <plurals name="licenses_modules">
+        <item quantity="one">%d module</item>
+        <item quantity="other">%d modules</item>
+    </plurals>
+    <string name="licenses_expand">Show modules</string>
+    <string name="licenses_collapse">Hide modules</string>
+    <string name="licenses_text_unavailable">The full text for license %1$s is not bundled in the app.</string>
+    <string name="licenses_load_error">Couldn’t load the open source licenses list.</string>
 
     <!-- Welcome -->
     <string name="welcome_title">Put your app to the test on tough networks</string>
