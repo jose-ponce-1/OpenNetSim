@@ -183,8 +183,8 @@ Decisión del usuario (26/11/2026): descartar Google Play (requisito de cuenta d
 - [x] Puerta de calidad completa en verde: 251 tests (127 en `:core`, 124 en `:app`, 1 omitido en Windows), cobertura 90,6 %, `detekt`, `lintDebug`, `:benchmark:smokeBenchmark` y `:app:assembleRelease` firmado (1,52 MB, `DependencyInfo` ausente).
 - [x] Verificación final del usuario en su teléfono tras el arreglo del `Snackbar` en modo oscuro (27/11/2026: «Acerca de», «Licencias de código abierto», lectura offline y `Snackbar` en modo oscuro funcionan correctamente).
 - [x] Cambio archivado en `openspec/changes/archive/2026-11-27-add-open-source-licenses` y spec `app-navigation` sincronizada.
-- [x] Integración en `develop` (PR #28) y subida de versión para la release `1.0.3` (`versionCode` 4, `versionName` `1.0.3`).
-- [ ] Release `v1.0.3` en GitHub.
+- [x] Integración en `develop` (PR #28 y PR #29) y subida de versión para la release `1.0.3` (`versionCode` 4, `versionName` `1.0.3`).
+- [x] Release `v1.0.3` en GitHub (27/11/2026, «OpenNetSim 1.0.3», etiqueta `v1.0.3` sobre `fb2a5a4`, `OpenNetSim-1.0.3.apk` con SHA-256 `d5016ec6…29b45da`).
 
 ## Hoja de Ruta
 1. ~~Fidelidad de la simulación~~ (Fase 9).
@@ -206,6 +206,6 @@ Decisión del usuario (26/11/2026): descartar Google Play (requisito de cuenta d
 
 ## Punto de Retorno (Checkpoint)
 - **Últimos archivos modificados:** `buildSrc/build.gradle.kts`, `buildSrc/src/main/java/com/opennetsim/gradle/GenerateOpenSourceLicensesTask.java`, `app/build.gradle.kts`, `SupportLinks.kt`, `AboutDialog.kt`, `OpenSourceLicenses.kt`, `OpenSourceLicensesDialog.kt`, `MainScaffold.kt`, `values/themes.xml`, `values-night/themes.xml`, `values/strings.xml`, `values-es/strings.xml`, `SupportLinksTest.kt`, `OpenSourceLicensesTest.kt`, `openspec/specs/app-navigation/spec.md` y `project-state.md`.
-- **Estado General:** Fases 1–16 en `develop` y `main`; versiones 1.0.0, 1.0.1 y 1.0.2 publicadas en GitHub (etiquetas `v1.0.0`, `v1.0.1` y `v1.0.2`). Fase 17 (`add-open-source-licenses`, PR #28) integrada en `develop` y versión `1.0.3` (`versionCode` 4) preparada para llevar a `main`.
-- **Artefacto de Distribución:** releases 1.0.0, 1.0.1 y 1.0.2 en GitHub (`OpenNetSim-1.0.2.apk`, SHA-256 `be6d76a71bfd04c86727ff0053fd37c713e648563351494b3a2d70d362323ce1`); localmente, `app/build/outputs/apk/release/app-release.apk` (firmado con el keystore del usuario) y `app/build/outputs/apk/debug/app-debug.apk`.
-- **Siguiente acción inmediata:** fusionar `develop` en `main`, compilar el APK firmado `OpenNetSim-1.0.3.apk`, crear la etiqueta `v1.0.3` sobre `main` y publicar la release en GitHub; después preparar los metadatos de F-Droid (`fastlane/metadata/android/` y MR en `fdroiddata`).
+- **Estado General:** Fases 1–17 en `develop` y `main`; versiones 1.0.0, 1.0.1, 1.0.2 y 1.0.3 publicadas en GitHub (etiquetas `v1.0.0`, `v1.0.1`, `v1.0.2` y `v1.0.3`).
+- **Artefacto de Distribución:** releases 1.0.0, 1.0.1, 1.0.2 y 1.0.3 en GitHub (`OpenNetSim-1.0.3.apk`, SHA-256 `d5016ec6da6708afa6bacffca17e4d0f8c755f3369dcf9b29cd88ad6629b45da`); localmente, `app/build/outputs/apk/release/app-release.apk` (firmado con el keystore del usuario) y `app/build/outputs/apk/debug/app-debug.apk`.
+- **Siguiente acción inmediata:** preparar los metadatos de F-Droid (`fastlane/metadata/android/` en `en-US` y `es-ES`) y enviar el Merge Request a `fdroiddata`; más adelante, `targetSdk` 37 en junio de 2027. Para versiones siguientes: subir `versionCode`/`versionName`, llevar `develop` a `main`, etiqueta `vX.Y.Z` y release con el mismo keystore.
