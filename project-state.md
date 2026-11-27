@@ -171,7 +171,20 @@ Petición del usuario (19/11/2026): actualizar Compose, AndroidX y corrutinas, y
 - [x] Verificación del usuario en su teléfono con la release firmada (19/11/2026: funciona correctamente).
 - [x] Cambio archivado en `openspec/changes/archive/2026-11-19-upgrade-androidx-libraries`.
 - [x] Integración final en `develop` (PR #23 y PR #25 con `681cc02`) y subida de versión para la release `1.0.2` (`versionCode` 3, `versionName` `1.0.2`).
-- [ ] Release `v1.0.2` en GitHub.
+- [x] Release `v1.0.2` en GitHub (25/11/2026, «OpenNetSim 1.0.2», etiqueta `v1.0.2` sobre `c1acc17`, `OpenNetSim-1.0.2.apk` con SHA-256 `be6d76a7…2323ce1`).
+
+### Fase 17: Licencias de código abierto y preparación para F-Droid (cambio OpenSpec `add-open-source-licenses`, rama `feat/open-source-licenses`)
+Decisión del usuario (26/11/2026): descartar Google Play (requisito de cuenta de Organización con D-U-N-S para apps con `VpnService`), centrar la distribución en **GitHub Releases y F-Droid**, añadir la pantalla de licencias con una tarea Gradle propia y dejar `targetSdk` 37 para junio de 2027.
+- [x] Limpieza de Google Play: retirado `bundle` y añadido `dependenciesInfo { includeInApk = false; includeInBundle = false }` en `app/build.gradle.kts`; eliminada la distinción por instalador en `SupportLinks.kt` y `AboutDialog.kt` para mostrar siempre «Apoya el proyecto» en Ko-fi; delta spec en `app-navigation`.
+- [x] Tarea Gradle propia en `buildSrc` (`GenerateOpenSourceLicensesTask`) y `app/build.gradle.kts`: lee de forma determinista y sin red los `.pom` resueltos de `releaseRuntimeClasspath`, valida licencias FOSS permitidas (72 artefactos en Apache 2.0) y genera `assets/licenses/libraries.tsv` y `assets/licenses/apache-2.0.txt` (compatible con `--offline` y `--configuration-cache`).
+- [x] Lector JVM en `OpenSourceLicenses.kt` con agrupación por grupo Maven/licencia y tests en `OpenSourceLicensesTest.kt`.
+- [x] Interfaz Material 3 (`OpenSourceLicensesDialog.kt`) accesible desde `AboutDialog.kt` con lectura offline del texto completo de Apache 2.0, traducida a inglés y español (`values/` y `values-es/`).
+- [x] Contraste del aviso `Snackbar` en modo oscuro (`AppSnackbarHost` en `MainScaffold.kt` + `android:forceDarkAllowed="false"` en `values/themes.xml` y `values-night/themes.xml`): evita texto blanco sobre fondo claro en dispositivos con ajuste automático de tema oscuro.
+- [x] Puerta de calidad completa en verde: 251 tests (127 en `:core`, 124 en `:app`, 1 omitido en Windows), cobertura 90,6 %, `detekt`, `lintDebug`, `:benchmark:smokeBenchmark` y `:app:assembleRelease` firmado (1,52 MB, `DependencyInfo` ausente).
+- [x] Verificación final del usuario en su teléfono tras el arreglo del `Snackbar` en modo oscuro (27/11/2026: «Acerca de», «Licencias de código abierto», lectura offline y `Snackbar` en modo oscuro funcionan correctamente).
+- [x] Cambio archivado en `openspec/changes/archive/2026-11-27-add-open-source-licenses` y spec `app-navigation` sincronizada.
+- [x] Integración en `develop` (PR #28) y subida de versión para la release `1.0.3` (`versionCode` 4, `versionName` `1.0.3`).
+- [ ] Release `v1.0.3` en GitHub.
 
 ## Hoja de Ruta
 1. ~~Fidelidad de la simulación~~ (Fase 9).
@@ -182,17 +195,17 @@ Petición del usuario (19/11/2026): actualizar Compose, AndroidX y corrutinas, y
    - Test de velocidad de Google cancelado y repetido enseguida (observado por el usuario el 17/11/2026 con la release): mide menos de lo configurado; si se deja terminar, el siguiente es normal. Causa medida: los sockets TCP exteriores acumulaban varios MB sin leer en el kernel (hasta 6,9 MB por conexión), que se seguían entregando por el límite. Resuelto en el cambio `clamp-outer-receive-window` (PR #11, archivado): `SO_RCVBUF` y `TCP_WINDOW_CLAMP` proporcionales a la red simulada, ajustables en caliente. Verificado por el usuario con el test oficial de M-Lab recargado 5–6 veces a mitad de prueba, sin pérdida; el de Google no se pudo repetir (IP bloqueada temporalmente).
 6. ~~Nueva interfaz~~ (Fase 14, PR #16).
 7. ~~Primera versión oficial~~ (18/11/2026): PR #17 en `main`, etiqueta `v1.0.0` y [release de GitHub](https://github.com/jose-ponce-1/OpenNetSim/releases/tag/v1.0.0) con `OpenNetSim-1.0.0.apk` firmado (esquema v2, RSA 4096; SHA-256 del APK `25ed88b2…a17a85`). Aviso «tal cual, sin garantías» en «Acerca de», README y notas de la release. README visual (logo animado en SVG, capturas en claro y oscuro, perfiles, cómo funciona) en la rama `docs/visual-readme`.
-8. Mejoras opcionales anotadas por el usuario (18/11/2026):
-   - `targetSdk` 37: Google Play lo pedirá previsiblemente en agosto de 2027 (cambios de comportamiento de Android 17).
-   - El aviso «Desliza para ver n perfiles más» y la animación de los chips reaparecen al volver a Simular desde otra sección. Causa: su estado vive en el composable de Simular (`ProfileChips.kt`, `remember`/`rememberSaveable`) y se pierde al salir de la composición. Arreglo posible: guardarlo en el ViewModel o en `UiPreferences` (mostrarlo solo las primeras veces). No le molesta por ahora.
-   - Pantalla «Licencias de código abierto» con las librerías incluidas (como AntennaPod; la licencia Apache de AndroidX y Kotlin pide entregar su texto al redistribuirlas). Recomendada, no pedida aún.
-   - Ojo con Google Play: la versión de Play enlaza al repositorio, cuya página y README enlazan a Ko-fi; un revisor podría considerarlo un camino indirecto al pago.
-   - Publicación en Google Play: necesitará un AAB (`bundleRelease`) en lugar del APK.
+8. Mejoras y publicación (actualizado el 26/11/2026):
+   - ~~Pantalla «Licencias de código abierto»~~ (Fase 17).
+   - ~~Publicación en Google Play~~: descartada el 26/11/2026 por el requisito de cuenta de Organización con D-U-N-S para `VpnService`; la distribución se centra en **GitHub Releases y F-Droid**.
+   - Preparación para F-Droid: metadatos `fastlane/metadata/android/` (`en-US` y `es-ES`), subida de versión y envío de Merge Request en `fdroiddata`.
+   - `targetSdk` 37: aplazado a junio de 2027 para adaptar los cambios de comportamiento de Android 17 con margen.
+   - El aviso «Desliza para ver n perfiles más» y la animación de los chips reaparecen al volver a Simular desde otra sección (`ProfileChips.kt`). Aparcado por ahora; mejora prevista: limitar la animación a las primeras veces en `UiPreferences`.
 
 ---
 
 ## Punto de Retorno (Checkpoint)
-- **Últimos archivos modificados:** `gradle/libs.versions.toml`, `app/build.gradle.kts` (`compileSdk` 37.1, `targetSdk` 36, `versionCode` 3, `versionName` `1.0.2`), `ui/components/Components.kt` (`AppOutlinedButton`), `UiTextResources.kt`, `ProfileDialogs.kt`, `MainScaffold.kt`, `SimulateScreen.kt`, `AboutDialog.kt`, `README.md`, `ThrottlingEngineTest.kt` y `project-state.md`.
-- **Estado General:** Fases 1–15 en `develop` y `main`; versiones 1.0.0 y 1.0.1 publicadas en GitHub (etiquetas `v1.0.0` y `v1.0.1`). Fase 16 (librerías y `targetSdk` 36) integrada en `develop` (PR #23 y PR #25) y versión `1.0.2` (`versionCode` 3) preparada para llevar a `main` mediante el PR #24.
-- **Artefacto de Distribución:** releases 1.0.0 y 1.0.1 en GitHub; localmente, `app/build/outputs/apk/release/app-release.apk` (firmada con el keystore del usuario, configurado en `~/.gradle/gradle.properties`) y `app/build/outputs/apk/debug/app-debug.apk`.
-- **Siguiente acción inmediata:** fusionar el PR #24 (`develop` → `main`), compilar el APK firmado `OpenNetSim-1.0.2.apk`, crear la etiqueta `v1.0.2` sobre `main` y publicar la release en GitHub.
+- **Últimos archivos modificados:** `buildSrc/build.gradle.kts`, `buildSrc/src/main/java/com/opennetsim/gradle/GenerateOpenSourceLicensesTask.java`, `app/build.gradle.kts`, `SupportLinks.kt`, `AboutDialog.kt`, `OpenSourceLicenses.kt`, `OpenSourceLicensesDialog.kt`, `MainScaffold.kt`, `values/themes.xml`, `values-night/themes.xml`, `values/strings.xml`, `values-es/strings.xml`, `SupportLinksTest.kt`, `OpenSourceLicensesTest.kt`, `openspec/specs/app-navigation/spec.md` y `project-state.md`.
+- **Estado General:** Fases 1–16 en `develop` y `main`; versiones 1.0.0, 1.0.1 y 1.0.2 publicadas en GitHub (etiquetas `v1.0.0`, `v1.0.1` y `v1.0.2`). Fase 17 (`add-open-source-licenses`, PR #28) integrada en `develop` y versión `1.0.3` (`versionCode` 4) preparada para llevar a `main`.
+- **Artefacto de Distribución:** releases 1.0.0, 1.0.1 y 1.0.2 en GitHub (`OpenNetSim-1.0.2.apk`, SHA-256 `be6d76a71bfd04c86727ff0053fd37c713e648563351494b3a2d70d362323ce1`); localmente, `app/build/outputs/apk/release/app-release.apk` (firmado con el keystore del usuario) y `app/build/outputs/apk/debug/app-debug.apk`.
+- **Siguiente acción inmediata:** fusionar `develop` en `main`, compilar el APK firmado `OpenNetSim-1.0.3.apk`, crear la etiqueta `v1.0.3` sobre `main` y publicar la release en GitHub; después preparar los metadatos de F-Droid (`fastlane/metadata/android/` y MR en `fdroiddata`).

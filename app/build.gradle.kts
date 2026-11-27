@@ -1,3 +1,6 @@
+import com.opennetsim.gradle.GenerateOpenSourceLicensesTask
+import org.gradle.api.artifacts.component.ModuleComponentIdentifier
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -19,8 +22,8 @@ android {
         applicationId = "com.opennetsim"
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.0.2"
+        versionCode = 4
+        versionName = "1.0.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -66,12 +69,10 @@ android {
         localeFilters += listOf("en", "es")
     }
 
-    // Google Play reparte los AAB por idioma: sin esto, un móvil en inglés no recibiría el español y no
-    // podría elegirlo como idioma de la app (Android 13+). Con dos idiomas el tamaño apenas cambia.
-    bundle {
-        language {
-            enableSplit = false
-        }
+    // Desactiva el bloque binario de metadatos de dependencias de AGP para generar APKs reproducibles y aptos para F-Droid.
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = false
     }
 }
 
@@ -139,5 +140,51 @@ kover {
         verify {
             rule("Cobertura mínima de líneas de :app y :core") { minBound(85) }
         }
+    }
+}
+
+private fun Project.resolveRuntimePomInputs(): Pair<List<String>, Set<File>> {
+    val runtimeConfig = configurations.getByName("releaseRuntimeClasspath")
+    val coords = runtimeConfig.incoming.artifacts.artifacts
+        .mapNotNull { it.id.componentIdentifier as? ModuleComponentIdentifier }
+        .map { "${it.group}:${it.module}:${it.version}" }
+        .distinct()
+        .sorted()
+    val allPoms = linkedSetOf<File>()
+    val parsedCoords = hashSetOf<String>()
+    var pending = coords
+    repeat(4) {
+        if (pending.isEmpty()) return@repeat
+        val pomConfig = configurations.detachedConfiguration(
+            *pending.map { dependencies.create("$it@pom") }.toTypedArray()
+        ).apply { isTransitive = false }
+        val resolved = pomConfig.incoming.artifactView { lenient(true) }.artifacts.artifacts.map { it.file }
+        allPoms += resolved
+        val nextParents = mutableListOf<String>()
+        for (file in resolved) {
+            val meta = GenerateOpenSourceLicensesTask.parsePom(file) ?: continue
+            parsedCoords += meta.coordinate
+            if (meta.licenses.isEmpty() && meta.parentCoordinate != null) {
+                nextParents += meta.parentCoordinate!!
+            }
+        }
+        pending = nextParents.distinct().filter { it !in parsedCoords }
+    }
+    return coords to allPoms
+}
+
+androidComponents {
+    onVariants { variant ->
+        val taskName = "generate${variant.name.replaceFirstChar(Char::uppercase)}OpenSourceLicenses"
+        val licenseTask = tasks.register<GenerateOpenSourceLicensesTask>(taskName) {
+            val (coords, poms) = project.resolveRuntimePomInputs()
+            resolvedCoordinates.set(coords)
+            pomFiles.from(poms)
+            apacheLicenseFile.set(rootProject.layout.projectDirectory.file("LICENSE.txt"))
+        }
+        variant.sources.assets?.addGeneratedSourceDirectory(
+            licenseTask,
+            GenerateOpenSourceLicensesTask::getOutputAssetsDir
+        )
     }
 }

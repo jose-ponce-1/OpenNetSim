@@ -23,6 +23,7 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -39,6 +40,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.opennetsim.R
@@ -67,7 +69,7 @@ fun MainScaffold(state: MainUiState, actions: MainActions, modifier: Modifier = 
             floatingActionButton = {
                 if (destination == AppDestination.TELEMETRY) TunnelFab(state, actions.onToggle)
             },
-            snackbarHost = { SnackbarHost(snackbarHostState) }
+            snackbarHost = { AppSnackbarHost(snackbarHostState) }
         ) { padding ->
             val content = Modifier
                 .padding(padding)
@@ -179,4 +181,24 @@ private fun TunnelFab(state: MainUiState, onToggle: () -> Unit) {
         containerColor = if (running) colors.tertiaryContainer else colors.primaryContainer,
         contentColor = if (running) colors.onTertiaryContainer else colors.onPrimaryContainer
     )
+}
+
+private const val DARK_LUMINANCE_THRESHOLD = 0.5f
+
+/**
+ * Usa contenedor oscuro y texto claro en ambos temas: en modo oscuro evita la superficie clara de
+ * `inverseSurface`, que en algunos fabricantes con ajuste automático de tema oscuro vuelve blanco el texto.
+ */
+@Composable
+private fun AppSnackbarHost(hostState: SnackbarHostState) {
+    val colors = MaterialTheme.colorScheme
+    val isDark = colors.surface.luminance() < DARK_LUMINANCE_THRESHOLD
+    SnackbarHost(hostState = hostState) { data ->
+        Snackbar(
+            snackbarData = data,
+            containerColor = if (isDark) colors.surfaceVariant else colors.inverseSurface,
+            contentColor = if (isDark) colors.onSurface else colors.inverseOnSurface,
+            actionColor = if (isDark) colors.primary else colors.inversePrimary
+        )
+    }
 }

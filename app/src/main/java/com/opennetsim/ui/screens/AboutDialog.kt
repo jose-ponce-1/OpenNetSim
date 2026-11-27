@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Coffee
+import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
@@ -25,7 +26,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -41,14 +46,14 @@ import com.opennetsim.ui.components.BrandLogo
 
 /**
  * Información de la app: versión, descripción, código abierto con enlace a GitHub, apoyo económico con
- * enlace a Ko-fi (no si se instaló desde Google Play, ver [SupportLinks.donationLinkAllowed]) y firma.
- * Desplazable: en pantallas de 360 × 640 dp no cabe entero.
+ * enlace a Ko-fi y firma. Desplazable: en pantallas de 360 × 640 dp no cabe entero.
  */
 @Composable
 internal fun AboutDialog(onDismiss: () -> Unit) {
     val context = LocalContext.current
     val version = remember(context) { versionName(context) }
-    val showDonations = remember(context) { SupportLinks.donationLinkAllowed(installerPackage(context)) }
+    var showLicenses by rememberSaveable { mutableStateOf(false) }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = { BrandLogo(size = 48.dp, contentDescription = null) },
@@ -71,20 +76,24 @@ internal fun AboutDialog(onDismiss: () -> Unit) {
                     title = stringResource(R.string.about_open_source_title),
                     text = stringResource(R.string.about_open_source_text)
                 ) {
-                    AppOutlinedButton(onClick = { openLink(context, SupportLinks.SOURCE_CODE_URL) }) {
-                        ButtonIcon(Icons.Outlined.Code)
-                        Text(stringResource(R.string.about_view_source))
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        AppOutlinedButton(onClick = { openLink(context, SupportLinks.SOURCE_CODE_URL) }) {
+                            ButtonIcon(Icons.Outlined.Code)
+                            Text(stringResource(R.string.about_view_source))
+                        }
+                        TextButton(onClick = { showLicenses = true }) {
+                            ButtonIcon(Icons.Outlined.Description)
+                            Text(stringResource(R.string.about_view_licenses))
+                        }
                     }
                 }
-                if (showDonations) {
-                    AboutSection(
-                        title = stringResource(R.string.about_support_title),
-                        text = stringResource(R.string.about_support_text)
-                    ) {
-                        FilledTonalButton(onClick = { openLink(context, SupportLinks.KO_FI_URL) }) {
-                            ButtonIcon(Icons.Outlined.Coffee)
-                            Text(stringResource(R.string.about_support_button))
-                        }
+                AboutSection(
+                    title = stringResource(R.string.about_support_title),
+                    text = stringResource(R.string.about_support_text)
+                ) {
+                    FilledTonalButton(onClick = { openLink(context, SupportLinks.KO_FI_URL) }) {
+                        ButtonIcon(Icons.Outlined.Coffee)
+                        Text(stringResource(R.string.about_support_button))
                     }
                 }
                 MadeWithLove()
@@ -92,6 +101,10 @@ internal fun AboutDialog(onDismiss: () -> Unit) {
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_close)) } }
     )
+
+    if (showLicenses) {
+        OpenSourceLicensesDialog(onDismiss = { showLicenses = false })
+    }
 }
 
 @Composable
@@ -130,19 +143,6 @@ private fun MadeWithLove() {
         )
         Text(stringResource(R.string.about_made_by), style = style)
     }
-}
-
-/** Paquete de la tienda que instaló la app; null si se instaló a mano (p. ej. el APK de GitHub). */
-private fun installerPackage(context: Context): String? = try {
-    val packageManager = context.packageManager
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-        packageManager.getInstallSourceInfo(context.packageName).installingPackageName
-    } else {
-        @Suppress("DEPRECATION")
-        packageManager.getInstallerPackageName(context.packageName)
-    }
-} catch (_: PackageManager.NameNotFoundException) {
-    null
 }
 
 private fun openLink(context: Context, url: String) {
